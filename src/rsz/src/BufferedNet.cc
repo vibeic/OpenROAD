@@ -500,8 +500,22 @@ BufferedNetPtr Resizer::makeBufferedNet(const sta::Pin* drvr_pin,
     case est::ParasiticsSrc::kPlacement:
       return makeBufferedNetSteiner(drvr_pin, corner);
     case est::ParasiticsSrc::kGlobalRouting:
-    case est::ParasiticsSrc::kDetailedRouting:
       return makeBufferedNetGroute(drvr_pin, corner);
+    case est::ParasiticsSrc::kDetailedRouting:
+      // vibeic fork — post-detailed-route repair fix.
+      // The Groute buffer-tree builder consumes the GlobalRouter route map
+      // (getPinGridPositions / getRoutes), which is only valid right after an
+      // in-session global_route. Detailed-route parasitics are annotated from
+      // OpenRCX / read_spef with NO live global_route (a repair reading a
+      // routed DEF), so that map is absent or stale: the stock code either
+      // null-derefs inside getPinGridPositions (Signal 11) or fails RSZ-0074
+      // ("found route to 1 pins, expected 2"). Note haveRoutes() is an
+      // unreliable guard here — reading a routed DEF makes it true while the
+      // per-net GR route map is still unusable. Always build the buffer tree
+      // with the placement-Steiner topology (always valid); violation
+      // detection and RC evaluation still use the real annotated detailed-route
+      // parasitics via the STA graph.
+      return makeBufferedNetSteiner(drvr_pin, corner);
     case est::ParasiticsSrc::kNone:
       return nullptr;
   }

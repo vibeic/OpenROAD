@@ -13,12 +13,12 @@ proc get_db_tech_checked { } {
 # namespace eval est
 }
 
-sta::define_cmd_args "estimate_parasitics" { -placement|-global_routing \
+sta::define_cmd_args "estimate_parasitics" { -placement|-global_routing|-detailed_routing \
                                             [-spef_file filename]}
 
 proc estimate_parasitics { args } {
   sta::parse_key_args "estimate_parasitics" args \
-    keys {-spef_file} flags {-placement -global_routing}
+    keys {-spef_file} flags {-placement -global_routing -detailed_routing}
 
   set filename ""
   if { [info exists keys(-spef_file)] } {
@@ -36,8 +36,16 @@ proc estimate_parasitics { args } {
     } else {
       utl::error EST 5 "Run global_route before estimating parasitics for global routing."
     }
+  } elseif { [info exists flags(-detailed_routing)] } {
+    # vibeic fork: mark that detailed-route parasitics are already annotated in
+    # STA (via extract_parasitics / read_spef) so the resizer trusts them
+    # instead of falling back to wire-load models. Does NOT re-estimate; the
+    # kDetailedRouting C++ case only sets parasitics_src_ so
+    # have_estimated_parasitics() becomes true and repair_design uses the real
+    # detailed-route RC. Run extract_parasitics (or read_spef) FIRST.
+    est::estimate_parasitics_cmd "detailed_routing" $filename
   } else {
-    utl::error EST 3 "missing -placement or -global_routing flag."
+    utl::error EST 3 "missing -placement, -global_routing or -detailed_routing flag."
   }
 }
 
