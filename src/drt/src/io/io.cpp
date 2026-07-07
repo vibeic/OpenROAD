@@ -1032,12 +1032,20 @@ frNet* io::Parser::addNet(odb::dbNet* db_net)
   bool has_jumpers = db_net->hasJumpers();
   bool is_abuted = db_net->isConnectedByAbutment();
   if (!is_special && db_net->getSigType().isSupply()) {
-    logger_->error(DRT,
-                   305,
-                   "Net {} of signal type {} is not routable by TritonRoute. "
-                   "Move to special nets.",
-                   db_net->getName(),
-                   db_net->getSigType().getString());
+    // Severity reclassification (DRT-0305): downgraded from a fatal
+    // logger_->error (which throws and aborts the command/process) to a
+    // recoverable warning so the router returns control instead of aborting
+    // the whole flow. Control deliberately falls through so the net is still
+    // built and added below as a (non-special) net -- this preserves
+    // addNet()'s contract of always returning a valid frNet*, which callers
+    // such as updateDesign() dereference. A wrapping flow can re-mark the net
+    // special and retry.
+    logger_->warn(DRT,
+                  305,
+                  "Net {} of signal type {} is not routable by TritonRoute. "
+                  "Move to special nets.",
+                  db_net->getName(),
+                  db_net->getSigType().getString());
   }
   std::unique_ptr<frNet> net_in
       = std::make_unique<frNet>(db_net->getName(), router_cfg_);

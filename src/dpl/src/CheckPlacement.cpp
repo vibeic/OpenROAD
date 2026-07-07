@@ -133,7 +133,12 @@ void Opendp::checkPlacement(const bool verbose,
           + region_placement_failures.size() + edge_spacing_failures.size()
           + blocked_layers_failures.size()
       > 0) {
-    logger_->error(
+    // Severity reclassification (DPL-0033): downgraded from a fatal
+    // logger_->error (which throws and aborts the command/process) to a
+    // recoverable warning so check_placement returns control to the caller.
+    // The individual violations were already reported above; a wrapping flow
+    // can inspect them and repair instead of the whole process aborting.
+    logger_->warn(
         DPL, 33, "detailed placement checks failed during check placement.");
   }
 }

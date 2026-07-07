@@ -4569,14 +4569,19 @@ double Resizer::findMaxWireLength1(bool issue_error)
 
   if (!max_length.has_value()) {
     if (issue_error) {
-      logger_->error(RSZ,
-                     89,
-                     "Could not find a resistance value for any corner. Cannot "
-                     "evaluate max wire length for buffer. Check over your "
-                     "`set_wire_rc` configuration");
-    } else {
-      max_length = -std::numeric_limits<double>::infinity();
+      // Severity reclassification (RSZ-0089): downgraded from a fatal
+      // logger_->error (which throws and aborts the command/process) to a
+      // recoverable warning so a wrapping flow can continue -- e.g. skip
+      // max-wire-length repair -- instead of the whole process aborting.
+      logger_->warn(RSZ,
+                    89,
+                    "Could not find a resistance value for any corner. Cannot "
+                    "evaluate max wire length for buffer. Check over your "
+                    "`set_wire_rc` configuration");
     }
+    // Always assign a sentinel so max_length.value() below does not throw
+    // bad_optional_access now that the error path no longer unwinds.
+    max_length = -std::numeric_limits<double>::infinity();
   }
 
   return max_length.value();
