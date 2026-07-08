@@ -1467,6 +1467,23 @@ std::vector<std::pair<frBlockObject*, odb::Point>> GuideProcessor::genGuides(
       path_finder.connectDisconnectedComponents(rects, intvs);
     }
   }
+  if (net->hasInitialRouting()) {
+    // This net already carries committed detailed routing that the incremental
+    // detailed router (RipUpMode::INCR) PRESERVES rather than reroutes, so the
+    // connectivity of its re-read guides is moot. The guide graph can look
+    // disconnected only because the very guide that routed this net on the
+    // first pass is now being re-validated against a populated GCELLGRID plus
+    // the net's own committed shapes (the identical guide connects fine before
+    // any global_route creates the gcell grid). Aborting here would kill an
+    // incremental ECO before the genuinely new/ripped-up nets can route.
+    // Warn and continue; INCR keeps this net's existing routing untouched.
+    logger_->warn(DRT,
+                  628,
+                  "Guide connectivity not re-established for already-routed net "
+                  "{}; preserved by incremental routing.",
+                  net->getName());
+    return {};
+  }
   logger_->error(
       DRT, 218, "Guide is not connected to design for net {}", net->getName());
   return {};
