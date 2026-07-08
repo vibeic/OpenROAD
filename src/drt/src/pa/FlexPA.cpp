@@ -164,16 +164,27 @@ void FlexPA::updateDirtyInsts()
     unique_inst_patterns_[unique_class]
         = std::vector<std::unique_ptr<FlexPinAccessPattern>>();
   }
+  // Mirror genAllAccessPoints(): capture any exception thrown inside the OpenMP
+  // region so it cannot escape and std::terminate the process. In this
+  // incremental (dirty-inst / ECO) path an inaccessible pin is downgraded to a
+  // warning (see genInstAccessPoints allow_pin_access_failure) so the reroute of
+  // the accessible dirty nets still completes.
+  ThreadException pa_exception;
 #pragma omp parallel for schedule(dynamic)
   for (auto& unique_class : dirty_unique_classes_vec) {
-    initSkipInstTerm(unique_class);
-    auto candidate_inst = unique_class->getFirstInst();
-    genInstAccessPoints(candidate_inst);
-    revertAccessPoints(candidate_inst);
-    if (isStdCell(candidate_inst)) {
-      prepPatternInst(candidate_inst);
+    try {
+      initSkipInstTerm(unique_class);
+      auto candidate_inst = unique_class->getFirstInst();
+      genInstAccessPoints(candidate_inst, /*allow_pin_access_failure=*/true);
+      revertAccessPoints(candidate_inst);
+      if (isStdCell(candidate_inst)) {
+        prepPatternInst(candidate_inst);
+      }
+    } catch (...) {
+      pa_exception.capture();
     }
   }
+  pa_exception.rethrow();
   for (auto& inst : dirty_insts_) {
     addToInstsSet(inst);
   }

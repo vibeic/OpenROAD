@@ -1494,7 +1494,8 @@ int FlexPA::genPinAccess(T* pin, frInstTerm* inst_term)
   return aps.size();
 }
 
-void FlexPA::genInstAccessPoints(frInst* unique_inst)
+void FlexPA::genInstAccessPoints(frInst* unique_inst,
+                                 bool allow_pin_access_failure)
 {
   ProfileTask profile("PA:uniqueInstance");
   for (auto& inst_term : unique_inst->getInstTerms()) {
@@ -1507,12 +1508,29 @@ void FlexPA::genInstAccessPoints(frInst* unique_inst)
       n_aps += genPinAccess(pin.get(), inst_term.get());
     }
     if (!n_aps) {
-      logger_->error(DRT,
-                     73,
-                     "No access point for {}/{} ({}).",
-                     inst_term->getInst()->getName(),
-                     inst_term->getTerm()->getName(),
-                     inst_term->getInst()->getMaster()->getName());
+      // In an incremental/ECO context (e.g. re-running pin access for buffers a
+      // post-route repair_design just inserted) a genuinely inaccessible pin must
+      // not abort the whole flow. Critically, the incremental caller runs us
+      // inside an OpenMP region, so a thrown logger error would escape the
+      // parallel region and std::terminate the process. Downgrade to a warning
+      // and leave the pin unaccessed; the affected net is reported unrouted
+      // downstream instead of crashing the ECO.
+      if (allow_pin_access_failure) {
+        logger_->warn(DRT,
+                      627,
+                      "No access point for {}/{} ({}); pin left unaccessed "
+                      "(incremental ECO reroute).",
+                      inst_term->getInst()->getName(),
+                      inst_term->getTerm()->getName(),
+                      inst_term->getInst()->getMaster()->getName());
+      } else {
+        logger_->error(DRT,
+                       73,
+                       "No access point for {}/{} ({}).",
+                       inst_term->getInst()->getName(),
+                       inst_term->getTerm()->getName(),
+                       inst_term->getInst()->getMaster()->getName());
+      }
     }
   }
 }

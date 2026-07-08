@@ -193,7 +193,8 @@ class FlexPA
    *
    * @param unique_inst the unique instance
    */
-  void genInstAccessPoints(frInst* unique_inst);
+  void genInstAccessPoints(frInst* unique_inst,
+                           bool allow_pin_access_failure = false);
 
   /**
    * @brief generates all access points of all unique instances
