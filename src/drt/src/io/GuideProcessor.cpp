@@ -645,18 +645,17 @@ bool GuideProcessor::isValidGuideLayerNum(odb::dbGuide* db_guide,
     error = true;
   }
   if (layer_num < router_cfg_->BOTTOM_ROUTING_LAYER) {
-    // check if this is a via access guide
-    if (!getDesign()->getTopBlock()->getGCellPatterns().empty()) {
-      auto guide_rect = db_guide->getBox();
-      guide_rect.bloat(-1, guide_rect);
-      const bool one_gcell_guide
-          = getDesign()->getTopBlock()->getGCellIdx(guide_rect.ll())
-            == getDesign()->getTopBlock()->getGCellIdx(guide_rect.ur());
-      if (!one_gcell_guide) {
-        error = true;  // not a valid via access guide
-      }
-    }
-    // else I don't know how many gcells the guide spans
+    // A below-min-routing-layer guide is a via-access guide, and it may
+    // legitimately span more than one gcell (e.g. a metal1 pin/port access
+    // region straddling a gcell boundary — common when regenerating guides over
+    // an existing placement in a post-route ECO). genGuides_split()'s via_only
+    // branch already breaks such a guide into one single-gcell via-access rect
+    // per spanned gcell, and coverPins() guarantees the pin stays covered, so it
+    // routes correctly as-is. This was previously rejected as DRT-0155 the moment
+    // a GCELLGRID existed, even though the no-GCELLGRID read path accepts the
+    // identical guide and routes it fine (buildGCellPatterns() + genGuides_split()
+    // run in both cases). Accept it here too so an incremental-GR ECO does not
+    // abort on a guide the router can and does handle.
   }
   if (error) {
     logger_->error(
