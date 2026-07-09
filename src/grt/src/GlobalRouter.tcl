@@ -287,11 +287,12 @@ sta::define_cmd_args "repair_antennas" { diode_cell \
                                          [-ratio_margin ratio_margin] \
                                          [-jumper_only] \
                                          [-diode_only] \
-                                         [-allow_congestion]}
+                                         [-allow_congestion] \
+                                         [-reroute]}
 
 proc repair_antennas { args } {
   sta::parse_key_args "repair_antennas" args \
-    keys {-iterations -ratio_margin} flags {-jumper_only -diode_only -allow_congestion}
+    keys {-iterations -ratio_margin} flags {-jumper_only -diode_only -allow_congestion -reroute}
   if { [ord::get_db_block] == "NULL" } {
     utl::error GRT 104 "No design block found."
   }
@@ -349,6 +350,39 @@ proc repair_antennas { args } {
       }
     }
 
+    if { [info exists flags(-reroute)] } {
+      # -reroute (vibeic fork): internalize the detailed-route-aware
+      # repair->reroute->repair loop so a caller no longer has to drive it.
+      # repair_antennas (grt) cannot itself re-run detailed_route: for a
+      # detailed-routed design it inserts diodes, refreshes only the GLOBAL
+      # route guides, and leaves the diode-dirty nets' detailed wire removed
+      # (which is exactly why asking it to iterate, -iterations N>1, trips
+      # GRT-0121). The mandated follow-up is an incremental detailed_route
+      # that re-realizes those dirty nets. This flag runs ONE grt repair pass
+      # at a time and re-routes between passes, until check_antennas is clean
+      # or the -iterations cap (default 10) is reached. Requires detailed
+      # routing -- for a global-route-only source the C++ loop already reroutes
+      # (IncrementalGRoute), so -reroute does not apply there.
+      if { ![grt::have_detailed_routes] } {
+        utl::error GRT 310 "repair_antennas -reroute requires detailed\
+          routing; run detailed_route first."
+      }
+      set reroute_cap 10
+      if { [info exists keys(-iterations)] } {
+        set reroute_cap $iterations
+      }
+      for { set pass 0 } { $pass < $reroute_cap } { incr pass } {
+        if { [check_antennas] == 0 } {
+          utl::info GRT 311 "repair_antennas -reroute: antenna-clean after\
+            $pass reroute pass(es)."
+          return 0
+        }
+        grt::repair_antennas $diode_mterm 1 $ratio_margin $jumper_only \
+          $diode_only
+        detailed_route -verbose 0
+      }
+      return [check_antennas]
+    }
     return [grt::repair_antennas $diode_mterm $iterations $ratio_margin $jumper_only $diode_only]
   } else {
     utl::error GRT 45 "Run global_route before repair_antennas."

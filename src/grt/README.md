@@ -215,6 +215,7 @@ repair_antennas
     [diode_cell]
     [-iterations iterations]
     [-ratio_margin margin]
+    [-reroute]
 ```
 
 #### Options
@@ -224,6 +225,7 @@ repair_antennas
 | `diode_cell` | Diode cell to fix antenna violations. |
 | `-iterations` | Number of iterations. The default value is `1`, and the allowed values are integers `[0, MAX_INT]`. |
 | `-ratio_margin` | Add a margin to the antenna ratios. The default value is `0`, and the allowed values are integers `[0, 100]`. |
+| `-reroute` | On a detailed-routed design, run the repair &rarr; incremental detailed route &rarr; repair loop internally until the antenna check is clean or `-iterations` passes are reached (the default cap is `10` in this mode), instead of requiring the caller to re-route between repair passes. Requires detailed routing; not applicable to a global-route-only source. |
 
 
 ### Draw Route Segments
