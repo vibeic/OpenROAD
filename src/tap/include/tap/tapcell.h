@@ -40,6 +40,10 @@ struct Options
   int halo_x = -1;  // default = 2um
   int halo_y = -1;  // default = 2um
   int row_min_width = -1;
+  // vibeic fork: restrict tapcell insertion to the placed-cell region (+ halo)
+  // so a sparse die is not flooded with well-taps over empty silicon.
+  bool bound_to_placement = false;
+  int placement_halo = -1;  // dbu; default = 2 * distance when < 0
   odb::dbMaster* cnrcap_nwin_master = nullptr;
   odb::dbMaster* cnrcap_nwout_master = nullptr;
   odb::dbMaster* tap_nwintie_master = nullptr;
@@ -234,6 +238,11 @@ class Tapcell
   std::string tap_prefix_;
   std::string endcap_prefix_;
   std::vector<Edge> filled_edges_;
+
+  // vibeic fork: -bound_to_placement. When set, tapcells are only placed whose
+  // center falls inside the placed-cell bounding box expanded by a latch-up halo.
+  void computePlacementBounds(const Options& options, int dist);
+  std::optional<odb::Rect> tap_placement_bounds_;
 };
 
 }  // namespace tap

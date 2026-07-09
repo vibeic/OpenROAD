@@ -207,6 +207,18 @@ int Tapcell::placeTapcells(odb::dbMaster* tapcell_master,
                                                  disallow_one_site_gaps);
     if (x_loc) {
       const int lly = row_bb.yMin();
+      // vibeic fork: -bound_to_placement -- skip a tap whose center falls outside
+      // the placed-cell region (+ halo), so a sparse die is not flooded with
+      // well-taps over empty silicon.
+      if (tap_placement_bounds_) {
+        const int cx = *x_loc + tap_width / 2;
+        const int cy = lly + tapcell_master->getHeight() / 2;
+        const odb::Rect& b = *tap_placement_bounds_;
+        if (cx < b.xMin() || cx > b.xMax() || cy < b.yMin() || cy > b.yMax()) {
+          x = *x_loc;
+          continue;
+        }
+      }
       auto* inst = makeInstance(
           db_->getChip()->getBlock(),
           tapcell_master,
@@ -1532,7 +1544,47 @@ void Tapcell::placeTapcells(const Options& options)
 
   const int dist = options.dist >= 0 ? options.dist : defaultDistance();
 
+  computePlacementBounds(options, dist);
   placeTapcells(options.tapcell_master, dist);
+  tap_placement_bounds_.reset();
+}
+
+// vibeic fork: -bound_to_placement -- compute the bounding box of the placed
+// std-cell (CORE) instances, expanded by a latch-up halo (default 2*distance),
+// so the tapcell loop below only ties the occupied region instead of flooding an
+// otherwise-empty sparse die with well-taps over bare silicon.
+void Tapcell::computePlacementBounds(const Options& options, int dist)
+{
+  tap_placement_bounds_.reset();
+  if (!options.bound_to_placement) {
+    return;
+  }
+  auto* block = db_->getChip()->getBlock();
+  odb::Rect bounds;
+  bounds.mergeInit();
+  for (auto* inst : block->getInsts()) {
+    if (inst->getMaster()->isCore() && inst->isPlaced()) {
+      bounds.merge(inst->getBBox()->getBox());
+    }
+  }
+  if (bounds.isInverted()) {
+    // No placed core cells -- nothing to bound; leave unset (place everywhere).
+    return;
+  }
+  const int halo = options.placement_halo >= 0 ? options.placement_halo : 2 * dist;
+  bounds.set_xlo(bounds.xMin() - halo);
+  bounds.set_ylo(bounds.yMin() - halo);
+  bounds.set_xhi(bounds.xMax() + halo);
+  bounds.set_yhi(bounds.yMax() + halo);
+  tap_placement_bounds_ = bounds;
+  logger_->info(utl::TAP,
+                105,
+                "Bounding tapcell insertion to the placed region "
+                "({:.3f} {:.3f}) ({:.3f} {:.3f}).",
+                block->dbuToMicrons(bounds.xMin()),
+                block->dbuToMicrons(bounds.yMin()),
+                block->dbuToMicrons(bounds.xMax()),
+                block->dbuToMicrons(bounds.yMax()));
 }
 
 odb::dbBlock* Tapcell::getBlock() const

@@ -23,6 +23,8 @@ sta::define_cmd_args "tapcell" {[-tapcell_master tapcell_master]\
                                 [-tbtie_cpp tbtie_cpp]\
                                 [-endcap_cpp endcap_cpp]\
                                 [-no_cell_at_top_bottom]\
+                                [-bound_to_placement]\
+                                [-placement_halo placement_halo]\
 }
 
 # Main function. It will run tapcell given the correct parameters
@@ -33,8 +35,8 @@ proc tapcell { args } {
               -tap_nwout2_master -tap_nwout3_master -tap_nwintie_master \
               -tap_nwouttie_master -cnrcap_nwin_master -cnrcap_nwout_master \
               -incnrcap_nwin_master -incnrcap_nwout_master -tbtie_cpp -tap_prefix \
-              -endcap_prefix} \
-    flags {-no_cell_at_top_bottom -disallow_one_site_gaps}
+              -endcap_prefix -placement_halo} \
+    flags {-no_cell_at_top_bottom -disallow_one_site_gaps -bound_to_placement}
 
   sta::check_argc_eq0 "tapcell" $args
 
@@ -165,11 +167,20 @@ proc tapcell { args } {
     }
   }
 
+  # vibeic fork: -bound_to_placement restricts tapcells to the placed-cell region
+  # (+ -placement_halo latch-up margin, default 2*distance) so a sparse die is not
+  # flooded with well-taps over empty silicon.
+  set bound_to_placement [info exists flags(-bound_to_placement)]
+  set placement_halo -1
+  if { [info exists keys(-placement_halo)] } {
+    set placement_halo [ord::microns_to_dbu $keys(-placement_halo)]
+  }
+
   tap::run $endcap_master $halo_x $halo_y $row_min_width $cnrcap_nwin_master \
     $cnrcap_nwout_master $tap_nwintie_master $tap_nwin2_master \
     $tap_nwin3_master $tap_nwouttie_master $tap_nwout2_master \
     $tap_nwout3_master $incnrcap_nwin_master $incnrcap_nwout_master \
-    $tapcell_master $dist
+    $tapcell_master $dist $bound_to_placement $placement_halo
 }
 
 sta::define_cmd_args "cut_rows" {[-endcap_master endcap_master]\

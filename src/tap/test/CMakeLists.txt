@@ -39,5 +39,9 @@ or_integration_tests(
     overlap_cover
     region1
     symmetry
+  PASSFAIL_TESTS
+    # vibeic fork: -bound_to_placement self-checks (stock>bounded>0, all-within);
+    # PASSFAIL avoids a brittle exact-count .ok golden.
+    bound_to_placement
 )
 

@@ -60,12 +60,16 @@
            const char* incnrcap_nwin_master,
            const char* incnrcap_nwout_master,
            odb::dbMaster* tapcell_master,
-           const int dist)
+           const int dist,
+           const bool bound_to_placement,
+           const int placement_halo)
   {
     Options options;
     options.endcap_master = endcap_master;
     options.tapcell_master = tapcell_master;
     options.dist = dist;
+    options.bound_to_placement = bound_to_placement;
+    options.placement_halo = placement_halo;
     options.halo_x = halo_x;
     options.halo_y = halo_y;
     options.row_min_width = row_min_width;

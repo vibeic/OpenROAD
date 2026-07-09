@@ -25,6 +25,8 @@ placement is similar to Figure 2.
 
 ```tcl
 tapcell 
+    [-bound_to_placement]
+    [-placement_halo placement_halo]
     [-cnrcap_nwin_master cnrcap_nwin_master]
     [-cnrcap_nwout_master cnrcap_nwout_master]
     [-disallow_one_site_gaps]
@@ -53,6 +55,8 @@ tapcell
 
 | Switch Name | Description |
 | ----- | ----- |
+| `[-bound_to_placement]` | Restrict tapcell insertion to the placed-cell region (its bounding box expanded by `-placement_halo`), instead of tiling the whole die. Prevents flooding an otherwise-empty sparse die with well-taps over bare silicon. |
+| `[-placement_halo]` | Latch-up margin (in microns) added around the placed-cell region when `-bound_to_placement` is used. Defaults to twice the tapcell `-distance`. |
 | `[-cnrcap_nwin_master]` | Macro cell placed at the corners the core area according the row orientation. |
 | `[-cnrcap_nwout_master]` | Macro cell placed at the corners the core area according the row orientation. |
 | `[-disallow_one_site_gaps]` | Option is deprecated. |
