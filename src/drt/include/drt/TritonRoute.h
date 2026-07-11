@@ -182,6 +182,12 @@ class TritonRoute : public PinAccessService
                 int num_threads);
   bool initGuide();
   void prep();
+  // vibeic fork: post-route additive min-area repair. After detailed_route
+  // fully converges, grow any residual isolated routing polygon that is below
+  // the layer min-area (e.g. an isolated via landing pad) into a spacing-safe
+  // rectangle >= min-area. Runs OUTSIDE the ripup loop, so it never re-enters
+  // the maze router. Returns the number of polygons patched.
+  int patchMinAreaViolations();
   odb::dbDatabase* getDb() const { return db_; }
   void fixMaxSpacing(int num_threads);
   void deleteInstancePAData(frInst* inst, bool delete_inst = false);

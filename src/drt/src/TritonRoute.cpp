@@ -4,11 +4,15 @@
 #include "drt/TritonRoute.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <set>
 #include <string>
 #include <thread>
@@ -22,7 +26,9 @@
 #include "boost/asio/post.hpp"
 #include "boost/bind/bind.hpp"
 #include "boost/geometry/geometry.hpp"
+#include "boost/polygon/polygon.hpp"
 #include "db/infra/frSegStyle.h"
+#include "db/tech/frConstraint.h"
 #include "db/obj/frShape.h"
 #include "db/obj/frVia.h"
 #include "db/tech/frLayer.h"
@@ -980,6 +986,482 @@ void TritonRoute::sendDesignUpdates(const std::string& router_cfg_path,
   design_->incrementVersion();
 }
 
+namespace {
+namespace gtl = boost::polygon;
+
+// Metal rectangle on the repair layer that the growth must respect.
+//  - hard  (different net / blockage / supply): the grown rectangle must keep
+//           >= spc to it.
+//  - soft  (same net as the pad): may be merged into (overlap), and any
+//           pre-existing sub-spc relationship (two shapes connected through
+//           std-cell metal in the sign-off spacing view, hence DRC-clean in the
+//           baseline) must be PRESERVED, never made tighter.
+struct MetalObs
+{
+  odb::Rect box;
+  bool hard;
+};
+
+// Squared euclidean edge-to-edge distance between two rectangles (0 if they
+// overlap or touch). Matches the euclidian metric the sign-off deck measures.
+int64_t distSq(const odb::Rect& a, const odb::Rect& b)
+{
+  const frCoord dx = std::max<frCoord>(0, std::max(b.xMin() - a.xMax(), a.xMin() - b.xMax()));
+  const frCoord dy = std::max<frCoord>(0, std::max(b.yMin() - a.yMax(), a.yMin() - b.yMax()));
+  return static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy;
+}
+
+// True iff the grown candidate `cand` (which contains `pad`) is spacing-legal.
+// For every obstacle the candidate must not come CLOSER than the smaller of the
+// min spacing and the obstacle's pre-existing euclidean distance to the pad.
+// Different-net metal is always >= spc away in a clean design, so this reduces
+// to the ordinary >= spc rule for it; a same-net shape that is already inside
+// spc (connected through excluded metal, hence baseline-clean) may be kept at
+// that distance or merged, but never approached more tightly -- so the repair
+// can never introduce a new external-spacing violation.
+bool patchSpacingSafe(const odb::Rect& cand,
+                      const odb::Rect& pad,
+                      frCoord spc,
+                      const std::vector<MetalObs>& obstacles)
+{
+  const int64_t spc_sq = static_cast<int64_t>(spc) * spc;
+  for (const auto& obs : obstacles) {
+    const int64_t dc = distSq(cand, obs.box);
+    if (dc >= spc_sq) {
+      continue;  // comfortably clear
+    }
+    if (obs.hard) {
+      return false;  // never within spc of a different net (overlap included)
+    }
+    if (cand.intersects(obs.box)) {
+      continue;  // merged into same-net metal: one polygon, no spacing rule
+    }
+    const int64_t d0 = distSq(pad, obs.box);  // pre-existing clean distance
+    if (dc < std::min(spc_sq, d0)) {
+      return false;  // approached same-net metal more tightly than the baseline
+    }
+  }
+  return true;
+}
+
+// Smallest length, snapped up to the manufacturing grid, so that
+// length * other_dim >= min_area (never shorter than keep_dim).
+frCoord neededLen(frArea min_area, frCoord other_dim, frCoord keep_dim, frCoord mgrid)
+{
+  const double raw
+      = static_cast<double>(min_area) / static_cast<double>(std::max<frCoord>(1, other_dim));
+  frCoord snapped = static_cast<frCoord>(std::ceil(raw / mgrid - 1e-9)) * mgrid;
+  return std::max(snapped, keep_dim);
+}
+
+// Resolve the owning signal net of a queried metal object, or nullptr for
+// blockages / supply / floating metal (which are always treated as hard).
+frNet* obstacleNet(frBlockObject* obj)
+{
+  if (obj == nullptr) {
+    return nullptr;
+  }
+  switch (obj->typeId()) {
+    case frcInstTerm: {
+      auto* t = static_cast<frInstTerm*>(obj);
+      return t->hasNet() ? t->getNet() : nullptr;
+    }
+    case frcBTerm: {
+      auto* t = static_cast<frBTerm*>(obj);
+      return t->hasNet() ? t->getNet() : nullptr;
+    }
+    case frcPathSeg:
+    case frcVia:
+    case frcPatchWire: {
+      auto* s = static_cast<frPinFig*>(obj);
+      return s->hasNet() ? s->getNet() : nullptr;
+    }
+    default:
+      return nullptr;  // blockage / obstruction: hard
+  }
+}
+
+// Grow the undersized rectangular pad into a legal rectangle whose area is
+// >= min_area. Computes the real room available on each side (bounded by
+// different-net metal only; same-net metal may be merged into), then tries
+// single-axis growth (partial + opposite fill) and, if that is not enough, a
+// 2-axis expansion. Every emitted rectangle is re-verified against the full
+// obstacle set so diagonal/corner cases can never slip through. On success
+// writes the grown rectangle to `out` and returns true.
+bool findMinAreaPatch(const odb::Rect& pad,
+                      frNet* pad_net,
+                      frArea min_area,
+                      frCoord spc,
+                      frCoord mgrid,
+                      const odb::Rect& die,
+                      frLayerNum lNum,
+                      frRegionQuery* rq,
+                      const std::vector<std::pair<odb::Rect, frNet*>>& added_patches,
+                      odb::Rect& out)
+{
+  const frCoord w = pad.dx();
+  const frCoord h = pad.dy();
+  if (w <= 0 || h <= 0) {
+    return false;
+  }
+
+  // Gather every OTHER metal rect on lNum in a generous window around the pad,
+  // classified same-net (soft, mergeable) vs different-net/blockage (hard).
+  const frCoord reach = neededLen(min_area, std::min(w, h), std::max(w, h), mgrid)
+                        + 2 * spc + 2 * mgrid;
+  const odb::Rect win(pad.xMin() - reach,
+                      pad.yMin() - reach,
+                      pad.xMax() + reach,
+                      pad.yMax() + reach);
+  std::vector<MetalObs> obstacles;
+  frRegionQuery::Objects<frBlockObject> dr_objs;
+  frRegionQuery::Objects<frBlockObject> fixed_objs;
+  rq->queryDRObj(win, lNum, dr_objs);
+  rq->query(win, lNum, fixed_objs);
+  auto add_obs = [&](const odb::Rect& box, frBlockObject* obj) {
+    if (box.overlaps(pad)) {
+      return;  // part of the pad polygon being grown (same net)
+    }
+    const bool hard = (pad_net == nullptr) || (obstacleNet(obj) != pad_net);
+    obstacles.push_back({box, hard});
+  };
+  for (const auto& [box, obj] : dr_objs) {
+    add_obs(box, obj);
+  }
+  for (const auto& [box, obj] : fixed_objs) {
+    add_obs(box, obj);
+  }
+  for (const auto& [r, r_net] : added_patches) {
+    if (!r.overlaps(pad) && r.intersects(win)) {
+      // A patch already added for the SAME net may be merged into (soft);
+      // a different net's patch must keep spacing (hard).
+      const bool hard = (pad_net == nullptr) || (r_net != pad_net);
+      obstacles.push_back({r, hard});
+    }
+  }
+
+  auto snap_down = [&](frCoord v) -> frCoord {
+    return v <= 0 ? 0 : (v / mgrid) * mgrid;
+  };
+
+  // Spacing-safe room available extending each side, keeping the perpendicular
+  // dimension equal to the pad. Only HARD (different-net) metal limits the
+  // extension; same-net metal can be grown through (merged). A hard obstacle
+  // offset `off` along the perpendicular axis only demands sqrt(spc^2-off^2) of
+  // clearance along the growth axis (euclidean), so the sized candidate stays
+  // >= spc from diagonally-offset different-net metal and will pass the verify.
+  auto perp_clear = [&](frCoord off) -> frCoord {
+    if (off >= spc) {
+      return -1;  // far enough perpendicular: never constrains this axis
+    }
+    if (off <= 0) {
+      return spc;
+    }
+    const double c = std::sqrt(static_cast<double>(spc) * spc
+                               - static_cast<double>(off) * off);
+    return static_cast<frCoord>(std::ceil(c - 1e-9));
+  };
+  frCoord eR = die.xMax() - pad.xMax();
+  frCoord eL = pad.xMin() - die.xMin();
+  frCoord eU = die.yMax() - pad.yMax();
+  frCoord eD = pad.yMin() - die.yMin();
+  for (const auto& obs : obstacles) {
+    if (!obs.hard) {
+      continue;
+    }
+    const odb::Rect& o = obs.box;
+    const frCoord off_x = std::max<frCoord>(
+        0, std::max(o.xMin() - pad.xMax(), pad.xMin() - o.xMax()));
+    const frCoord off_y = std::max<frCoord>(
+        0, std::max(o.yMin() - pad.yMax(), pad.yMin() - o.yMax()));
+    const frCoord clr_v = perp_clear(off_x);  // +/- y growth (keep pad x-range)
+    if (clr_v >= 0) {
+      if (o.yMin() >= pad.yMax()) {
+        eU = std::min(eU, o.yMin() - clr_v - pad.yMax());
+      }
+      if (o.yMax() <= pad.yMin()) {
+        eD = std::min(eD, pad.yMin() - clr_v - o.yMax());
+      }
+    }
+    const frCoord clr_h = perp_clear(off_y);  // +/- x growth (keep pad y-range)
+    if (clr_h >= 0) {
+      if (o.xMin() >= pad.xMax()) {
+        eR = std::min(eR, o.xMin() - clr_h - pad.xMax());
+      }
+      if (o.xMax() <= pad.xMin()) {
+        eL = std::min(eL, pad.xMin() - clr_h - o.xMax());
+      }
+    }
+  }
+  eR = snap_down(eR);
+  eL = snap_down(eL);
+  eU = snap_down(eU);
+  eD = snap_down(eD);
+
+  const frCoord need_w = neededLen(min_area, h, w, mgrid);  // keep height h
+  const frCoord need_h = neededLen(min_area, w, h, mgrid);  // keep width w
+
+  // Build the build-order candidate list.
+  auto gen_cands = [&](std::vector<odb::Rect>& cands) {
+    // Single-axis X growth (prefer filling right, then left), keep height.
+    if (w + eL + eR >= need_w) {
+      const frCoord grow = need_w - w;
+      const frCoord gr = std::min(eR, grow);
+      cands.emplace_back(pad.xMin() - (grow - gr), pad.yMin(), pad.xMax() + gr, pad.yMax());
+      const frCoord gl = std::min(eL, grow);
+      cands.emplace_back(pad.xMin() - gl, pad.yMin(), pad.xMax() + (grow - gl), pad.yMax());
+    }
+    // Single-axis Y growth (prefer up, then down), keep width.
+    if (h + eU + eD >= need_h) {
+      const frCoord grow = need_h - h;
+      const frCoord gu = std::min(eU, grow);
+      cands.emplace_back(pad.xMin(), pad.yMin() - (grow - gu), pad.xMax(), pad.yMax() + gu);
+      const frCoord gd = std::min(eD, grow);
+      cands.emplace_back(pad.xMin(), pad.yMin() - gd, pad.xMax(), pad.yMax() + (grow - gd));
+    }
+    // 2-axis: use full free width, fill the remaining area in height.
+    {
+      const frCoord new_w = w + eL + eR;
+      const frCoord nh = neededLen(min_area, new_w, h, mgrid);
+      if (h + eU + eD >= nh) {
+        const frCoord grow = nh - h;
+        const frCoord gu = std::min(eU, grow);
+        cands.emplace_back(
+            pad.xMin() - eL, pad.yMin() - (grow - gu), pad.xMax() + eR, pad.yMax() + gu);
+      }
+    }
+    // 2-axis: use full free height, fill the remaining area in width.
+    {
+      const frCoord new_h = h + eU + eD;
+      const frCoord nw = neededLen(min_area, new_h, w, mgrid);
+      if (w + eL + eR >= nw) {
+        const frCoord grow = nw - w;
+        const frCoord gr = std::min(eR, grow);
+        cands.emplace_back(
+            pad.xMin() - (grow - gr), pad.yMin() - eD, pad.xMax() + gr, pad.yMax() + eU);
+      }
+    }
+  };
+
+  std::vector<odb::Rect> cands;
+  gen_cands(cands);
+
+  for (const auto& c : cands) {
+    if (!die.contains(c)) {
+      continue;  // never grow outside the die/core area
+    }
+    if (static_cast<frArea>(c.dx()) * static_cast<frArea>(c.dy()) < min_area) {
+      continue;  // must actually satisfy min-area
+    }
+    if (patchSpacingSafe(c, pad, spc, obstacles)) {
+      out = c;
+      return true;
+    }
+  }
+  return false;
+}
+}  // namespace
+
+int TritonRoute::patchMinAreaViolations()
+{
+  frDesign* design = getDesign();
+  if (design == nullptr) {
+    return 0;
+  }
+  frTechObject* tech = design->getTech();
+  frBlock* block = design->getTopBlock();
+  frRegionQuery* rq = design->getRegionQuery();
+  if (tech == nullptr || block == nullptr || rq == nullptr) {
+    return 0;
+  }
+
+  // Rebuild the DR-object region query so the spacing check sees every shape as
+  // finally committed by detailed routing.
+  rq->initDRObj();
+
+  const odb::Rect die = block->getBBox();
+  const frCoord mgrid = std::max<frCoord>(1, tech->getManufacturingGrid());
+
+  int total_patched = 0;
+  int total_unresolved = 0;
+
+  for (const auto& ulayer : tech->getLayers()) {
+    frLayer* layer = ulayer.get();
+    if (layer->getType() != dbTechLayerType::ROUTING) {
+      continue;
+    }
+    frAreaConstraint* area_con = layer->getAreaConstraint();
+    if (area_con == nullptr) {
+      continue;
+    }
+    const frArea min_area = area_con->getMinArea();
+    if (min_area <= 0) {
+      continue;
+    }
+    const frLayerNum lNum = layer->getLayerNum();
+    const frCoord min_width = std::max<frCoord>(1, layer->getMinWidth());
+    frCoord spc = layer->getMinSpacingValue(min_width, min_width, 0, false);
+    if (spc <= 0) {
+      spc = min_width;  // conservative fallback
+    }
+
+    // Collect every undersized routing polygon on this layer.
+    std::vector<std::pair<frNet*, odb::Rect>> pads;
+    for (const auto& unet : block->getNets()) {
+      frNet* net = unet.get();
+      if (net == nullptr || net->isFixed() || net->isSpecial()) {
+        continue;
+      }
+
+      // Merge all of this net's metal on lNum into connected polygons.
+      gtl::polygon_90_set_data<frCoord> net_set;
+      bool any = false;
+      auto insert_rect = [&](const odb::Rect& r) {
+        if (r.xMin() >= r.xMax() || r.yMin() >= r.yMax()) {
+          return;
+        }
+        net_set.insert(
+            gtl::rectangle_data<frCoord>(r.xMin(), r.yMin(), r.xMax(), r.yMax()));
+        any = true;
+      };
+      for (const auto& shape : net->getShapes()) {
+        if (shape->getLayerNum() == lNum) {
+          insert_rect(shape->getBBox());
+        }
+      }
+      for (const auto& via : net->getVias()) {
+        const frViaDef* vd = via->getViaDef();
+        if (vd == nullptr) {
+          continue;
+        }
+        if (vd->getLayer1Num() == lNum) {
+          insert_rect(via->getLayer1BBox());
+        } else if (vd->getLayer2Num() == lNum) {
+          insert_rect(via->getLayer2BBox());
+        }
+      }
+      for (const auto& pwire : net->getPatchWires()) {
+        if (pwire->getLayerNum() == lNum) {
+          insert_rect(pwire->getBBox());
+        }
+      }
+      if (!any) {
+        continue;
+      }
+
+      std::vector<gtl::polygon_90_data<frCoord>> polys;
+      net_set.get(polys);
+      for (const auto& poly : polys) {
+        if (static_cast<frArea>(gtl::area(poly)) >= min_area) {
+          continue;
+        }
+        gtl::rectangle_data<frCoord> ext;
+        gtl::extents(ext, poly);
+        pads.emplace_back(
+            net, odb::Rect(gtl::xl(ext), gtl::yl(ext), gtl::xh(ext), gtl::yh(ext)));
+      }
+    }
+
+    // Tightness = flat spacing-safe bounding area available around the pad
+    // (hard, different-net metal only; no repair patches yet). Repair the most
+    // boxed-in pads FIRST so they claim their scarce room before easier pads
+    // consume it — this keeps the sequential-greedy repair convergent.
+    auto tightness = [&](frNet* pnet, const odb::Rect& pad) -> int64_t {
+      const frCoord w = pad.dx();
+      const frCoord h = pad.dy();
+      const frCoord reach
+          = neededLen(min_area, std::min(w, h), std::max(w, h), mgrid) + 2 * spc + 2 * mgrid;
+      const odb::Rect win(pad.xMin() - reach, pad.yMin() - reach,
+                          pad.xMax() + reach, pad.yMax() + reach);
+      frRegionQuery::Objects<frBlockObject> dr_objs, fixed_objs;
+      rq->queryDRObj(win, lNum, dr_objs);
+      rq->query(win, lNum, fixed_objs);
+      frCoord eR = die.xMax() - pad.xMax(), eL = pad.xMin() - die.xMin();
+      frCoord eU = die.yMax() - pad.yMax(), eD = pad.yMin() - die.yMin();
+      auto lim = [&](const odb::Rect& o, frBlockObject* ob) {
+        if (o.overlaps(pad)) {
+          return;
+        }
+        if (pnet != nullptr && obstacleNet(ob) == pnet) {
+          return;  // same net: mergeable, does not constrain
+        }
+        if ((o.yMax() > pad.yMin() - spc) && (o.yMin() < pad.yMax() + spc)) {
+          if (o.xMin() >= pad.xMax())
+            eR = std::min(eR, o.xMin() - spc - pad.xMax());
+          if (o.xMax() <= pad.xMin())
+            eL = std::min(eL, pad.xMin() - spc - o.xMax());
+        }
+        if ((o.xMax() > pad.xMin() - spc) && (o.xMin() < pad.xMax() + spc)) {
+          if (o.yMin() >= pad.yMax())
+            eU = std::min(eU, o.yMin() - spc - pad.yMax());
+          if (o.yMax() <= pad.yMin())
+            eD = std::min(eD, pad.yMin() - spc - o.yMax());
+        }
+      };
+      for (const auto& [b, o] : dr_objs) {
+        lim(b, o);
+      }
+      for (const auto& [b, o] : fixed_objs) {
+        lim(b, o);
+      }
+      eR = std::max<frCoord>(0, eR);
+      eL = std::max<frCoord>(0, eL);
+      eU = std::max<frCoord>(0, eU);
+      eD = std::max<frCoord>(0, eD);
+      return static_cast<int64_t>(w + eL + eR) * static_cast<int64_t>(h + eU + eD);
+    };
+
+    std::vector<int64_t> keys(pads.size());
+    for (size_t i = 0; i < pads.size(); ++i) {
+      keys[i] = tightness(pads[i].first, pads[i].second);
+    }
+    std::vector<size_t> order(pads.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(),
+              [&](size_t a, size_t b) { return keys[a] < keys[b]; });
+
+    // Sequential-greedy: each patch we add becomes an obstacle for later pads
+    // so neighbouring repairs never collide.
+    std::vector<std::pair<odb::Rect, frNet*>> added_patches;
+    for (size_t idx : order) {
+      frNet* net = pads[idx].first;
+      const odb::Rect& pad = pads[idx].second;
+      odb::Rect grown;
+      if (findMinAreaPatch(pad, net, min_area, spc, mgrid, die, lNum, rq,
+                           added_patches, grown)) {
+        auto pwire = std::make_unique<frPatchWire>();
+        pwire->setLayerNum(lNum);
+        pwire->setOrigin(odb::Point(0, 0));
+        pwire->setOffsetBox(grown);
+        net->addPatchWire(std::move(pwire));
+        added_patches.emplace_back(grown, net);
+        ++total_patched;
+      } else {
+        ++total_unresolved;
+        if (const char* dbg = std::getenv("VIBE_MINAREA_DEBUG")) {
+          std::ofstream ofs(dbg, std::ios::app);
+          if (ofs.is_open()) {
+            ofs << "UNRESOLVED net=" << net->getName() << " pad=(" << pad.xMin()
+                << "," << pad.yMin() << "," << pad.xMax() << "," << pad.yMax()
+                << ") wxh=" << pad.dx() << "x" << pad.dy()
+                << " tightness=" << keys[idx] << "\n";
+          }
+        }
+      }
+    }
+  }
+
+  if (total_patched > 0 || total_unresolved > 0) {
+    logger_->info(DRT,
+                  700,
+                  "Post-route min-area repair: patched {} isolated undersized "
+                  "polygon(s); {} unresolved.",
+                  total_patched,
+                  total_unresolved);
+  }
+  return total_patched;
+}
+
 int TritonRoute::main()
 {
   utl::Timer timer;
@@ -1073,7 +1555,13 @@ int TritonRoute::main()
                [this] { sendDesignUpdates("", router_cfg_->MAX_THREADS); });
   }
   dr();
+  // vibeic fork: additive post-route min-area repair. detailed_route can leave
+  // isolated routing polygons (e.g. via landing pads) below the layer min-area
+  // that its maze-integrated patcher never sees. Grow them into spacing-safe
+  // rectangles here, AFTER routing has fully converged, so we never re-enter
+  // the ripup loop. Purely additive metal on the owning signal net.
   if (!router_cfg_->SINGLE_STEP_DR) {
+    patchMinAreaViolations();
     endFR();
   }
   logger_->info(DRT, 501, "Runtime: {:.2f}s", timer.elapsed());
