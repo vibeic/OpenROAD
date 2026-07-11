@@ -1351,12 +1351,123 @@ int TritonRoute::patchMinAreaViolations()
 
       std::vector<gtl::polygon_90_data<frCoord>> polys;
       net_set.get(polys);
+
+      // Fast path: skip the net entirely unless it has at least one routing
+      // polygon on this layer below min-area (the common case is none, and we
+      // then avoid the placed-cell fixed-metal region query below).
+      bool any_undersized = false;
       for (const auto& poly : polys) {
-        if (static_cast<frArea>(gtl::area(poly)) >= min_area) {
+        if (static_cast<frArea>(gtl::area(poly)) < min_area) {
+          any_undersized = true;
+          break;
+        }
+      }
+      if (!any_undersized) {
+        continue;
+      }
+
+      // Placed-cell-geometry-aware detection.  Min-area is a property of the
+      // FULL PHYSICAL connected metal on the layer, not of the net's routing in
+      // isolation.  On a std-cell pin layer (sky130 li1, and commercial-PDK met1 alike)
+      // a routed stub/via-pad abuts the cell's own pin: the pin is fixed metal
+      // the router cannot grow but which contributes real area, so sign-off DRC
+      // (and the GC engine's own checkMetalShape_minArea) measure the connected
+      // routing+pin polygon.  If that polygon already meets min-area the shape
+      // is DRC-clean and must NOT be patched -- measuring the routing alone
+      // flags a phantom and grows a patch into neighbouring cells, injecting new
+      // spacing violations (the sky130 regression).
+      //
+      // Reproduce the DRC's connected-metal semantics: merge the net's routing
+      // with every placed-cell PIN and OBSTRUCTION shape on this layer that
+      // physically abuts it (from the SAME frRegionQuery the router uses --
+      // rq->query returns the fixed instTerm/instBlockage/blockage/bTerm metal
+      // that init() indexed from the placed cells), then flag a routing polygon
+      // ONLY when its full connected component is STILL below min-area.  A
+      // routing via pad whose full component (routing + the small cell metal it
+      // touches) is below min-area is a genuine violation and is grown by its
+      // own routing extent; a pad that abuts a pin large enough to already
+      // satisfy min-area is left untouched.  This is a true no-op wherever the
+      // router already left DRC-clean connected metal, on ANY PDK.
+      gtl::rectangle_data<frCoord> net_bbox;
+      gtl::extents(net_bbox, net_set);
+      const odb::Rect net_win(gtl::xl(net_bbox) - mgrid,
+                              gtl::yl(net_bbox) - mgrid,
+                              gtl::xh(net_bbox) + mgrid,
+                              gtl::yh(net_bbox) + mgrid);
+      frRegionQuery::Objects<frBlockObject> fixed_objs;
+      rq->query(net_win, lNum, fixed_objs);
+      gtl::polygon_90_set_data<frCoord> full_set(net_set);
+      for (const auto& [box, obj] : fixed_objs) {
+        if (obj == nullptr) {
           continue;
         }
+        switch (obj->typeId()) {
+          case frcInstTerm:      // placed std-cell pin metal
+          case frcInstBlockage:  // placed std-cell obstruction metal
+          case frcBlockage:      // fixed routing obstruction
+          case frcBTerm:         // IO pin metal
+            break;
+          default:
+            continue;  // signal/special-net routing: not fixed cell geometry
+        }
+        if (box.xMin() >= box.xMax() || box.yMin() >= box.yMax()) {
+          continue;
+        }
+        full_set.insert(gtl::rectangle_data<frCoord>(
+            box.xMin(), box.yMin(), box.xMax(), box.yMax()));
+      }
+
+      std::vector<gtl::polygon_90_data<frCoord>> full_polys;
+      full_set.get(full_polys);
+
+      std::ofstream diag_ofs;
+      if (const char* diag = std::getenv("VIBE_MINAREA_DIAG")) {
+        diag_ofs.open(diag, std::ios::app);
+      }
+
+      // Area of the connected component of the full (routing + cell) metal that
+      // contains a given routing polygon -- what the physical min-area DRC
+      // measures for that shape.
+      auto component_area = [&](const gtl::polygon_90_data<frCoord>& rpoly,
+                                frArea fallback) -> frArea {
+        for (const auto& fp : full_polys) {
+          gtl::polygon_90_set_data<frCoord> inter;
+          {
+            using boost::polygon::operators::operator+=;
+            using boost::polygon::operators::operator&=;
+            inter += fp;
+            inter &= rpoly;
+          }
+          if (gtl::area(inter) == 0) {
+            continue;  // not the component holding this routing polygon
+          }
+          return static_cast<frArea>(gtl::area(fp));
+        }
+        return fallback;
+      };
+
+      // Flag a routing polygon ONLY when its full physical connected component
+      // (routing + abutting placed-cell pin/obstruction metal) is still below
+      // min-area; grow it by its own routing extent.  A pad that abuts fixed
+      // cell metal large enough to already satisfy min-area is DRC-clean and
+      // left untouched -- a true no-op on any PDK whose router left connected
+      // metal that meets the rule.
+      for (const auto& rpoly : polys) {
+        const frArea route_area = static_cast<frArea>(gtl::area(rpoly));
+        if (route_area >= min_area) {
+          continue;  // routing alone already satisfies min-area
+        }
+        const frArea comp_area = component_area(rpoly, route_area);
+        if (diag_ofs.is_open()) {
+          diag_ofs << "DIAG lNum=" << lNum << " min_area=" << min_area
+                   << " route_area=" << route_area << " comp_area=" << comp_area
+                   << " comp_ge_min=" << (comp_area >= min_area ? 1 : 0) << "\n";
+        }
+        if (comp_area >= min_area) {
+          continue;  // full connected metal is DRC-clean: leave it (no-op)
+        }
         gtl::rectangle_data<frCoord> ext;
-        gtl::extents(ext, poly);
+        gtl::extents(ext, rpoly);
         pads.emplace_back(
             net, odb::Rect(gtl::xl(ext), gtl::yl(ext), gtl::xh(ext), gtl::yh(ext)));
       }
