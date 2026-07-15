@@ -1,0 +1,19 @@
+[INFO ODB-0227] LEF file: Nangate45/Nangate45.lef, created 22 layers, 27 vias, 135 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0130]     Created 54 pins.
+[INFO ODB-0131]     Created 1858 components and 4869 component-terminals.
+[INFO ODB-0132]     Created 2 special nets and 3716 connections.
+[INFO ODB-0133]     Created 428 nets and 1153 connections.
+[INFO RSZ-0100] Repair move sequence: BufferMove 
+[INFO RSZ-0094] Found 32 endpoints with setup violations.
+[INFO RSZ-0099] Repairing 32 out of 32 (100.00%) violating endpoints...
+   Iter   | Removed | Resized | Inserted | Cloned |  Pin  |   Area   |    WNS   |   StTNS    |   EnTNS    |  Viol  |  Worst  
+          | Buffers |  Gates  | Buffers  |  Gates | Swaps |          |          |            |            | Endpts | St/EnPt 
+------------------------------------------------------------------------------------------------------------------------------
+       0* |       0 |       0 |        0 |      0 |     0 |    +0.0% |   -0.043 |       -0.9 |       -0.5 |     32 | _706_/D
+      49* |       0 |       0 |       23 |      0 |     0 |    +4.2% |   -0.029 |       -0.6 |       -0.4 |     32 | _706_/D
+    final |       0 |       0 |       23 |      0 |     0 |    +4.2% |   -0.029 |       -0.6 |       -0.4 |     32 | _706_/D
+------------------------------------------------------------------------------------------------------------------------------
+[INFO RSZ-0040] Inserted 23 buffers.
+[WARNING RSZ-0062] Unable to repair all setup violations.
+POST_SPEF_REPAIR_SETUP no_crash improved
