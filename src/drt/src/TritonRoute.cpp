@@ -1368,7 +1368,7 @@ int TritonRoute::patchMinAreaViolations()
 
       // Placed-cell-geometry-aware detection.  Min-area is a property of the
       // FULL PHYSICAL connected metal on the layer, not of the net's routing in
-      // isolation.  On a std-cell pin layer (sky130 li1, and commercial-PDK met1 alike)
+      // isolation.  On a std-cell pin layer (sky130 li1, and a commercial-PDK met1 alike)
       // a routed stub/via-pad abuts the cell's own pin: the pin is fixed metal
       // the router cannot grow but which contributes real area, so sign-off DRC
       // (and the GC engine's own checkMetalShape_minArea) measure the connected
