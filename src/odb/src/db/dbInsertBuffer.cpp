@@ -277,6 +277,16 @@ dbInst* dbInsertBuffer::checkAndCreateBuffer()
   dbMTerm* input_mterm = nullptr;
   dbMTerm* output_mterm = nullptr;
   for (dbMTerm* mterm : const_cast<dbMaster*>(buffer_master_)->getMTerms()) {
+    // Defense-in-depth (vibeic): a POWER/GROUND pin declared DIRECTION INPUT
+    // (or omitted, which ODB defaults to INPUT) in a vendor LEF is
+    // electrically a supply, not a signal, and must never be counted as the
+    // buffer's I/O pin. Skip it so it cannot trip the ODB-1207/1208 pin-count
+    // reject that otherwise makes repair_design insert 0 buffers on a
+    // high-fanout net (leaving it unbuffered -> detailed-route shorts). A
+    // genuine signal pin has sigType SIGNAL/CLOCK and is unaffected.
+    if (mterm->getSigType().isSupply()) {
+      continue;
+    }
     if (mterm->getIoType() == dbIoType::INPUT) {
       if (input_mterm != nullptr) {
         logger_->warn(utl::ODB,
