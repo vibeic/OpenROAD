@@ -7,7 +7,9 @@
 #include <cmath>
 #include <cstddef>
 #include <fstream>
+#include <functional>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -20,6 +22,7 @@
 
 #include "boost/geometry/geometry.hpp"
 #include "connection.h"
+#include "transient.h"
 #include "db_sta/dbNetwork.hh"
 #include "debug_gui.h"
 #include "est/EstimateParasitics.h"
@@ -995,12 +998,16 @@ void IRSolver::addSourcesToMatrixAndVoltages(
   }
 }
 
-void IRSolver::solve(sta::Scene* corner,
-                     GeneratedSourceType source_type,
-                     const std::string& source_file)
+bool IRSolver::assembleSystem(
+    sta::Scene* corner,
+    GeneratedSourceType source_type,
+    const std::string& source_file,
+    Eigen::SparseMatrix<Connection::Conductance>& g_matrix,
+    Eigen::VectorXd& j_vector,
+    std::map<Node*, std::size_t>& real_node_index,
+    Voltage& src_voltage,
+    Power& total_power)
 {
-  const utl::DebugScopedTimer timer(logger_, utl::PSM, "timer", 1, "Solve: {}");
-
   if (network_->isFloorplanningOnly()) {
     network_->setFloorplanning(false);
     network_->construct();
@@ -1011,7 +1018,7 @@ void IRSolver::solve(sta::Scene* corner,
     currents_.erase(corner);
     solution_voltages_.erase(corner);
     solution_power_.erase(corner);
-    return;
+    return false;
   }
 
   assertResistanceMap(corner);
@@ -1025,7 +1032,7 @@ void IRSolver::solve(sta::Scene* corner,
 
   // Build source map
   SourceNodes real_src_nodes;
-  Voltage src_voltage
+  src_voltage
       = generateSourceNodes(source_type, source_file, corner, real_src_nodes);
 
   SourceNodes src_nodes;
@@ -1079,12 +1086,12 @@ void IRSolver::solve(sta::Scene* corner,
     }
   }
 
-  const Power total_power = buildNodeCurrentMap(corner, currents);
+  total_power = buildNodeCurrentMap(corner, currents);
 
   // Solve
   // create vector of nodes
   std::map<Node*, std::size_t> node_index = assignNodeIDs(all_nodes);
-  const std::map<Node*, std::size_t> real_node_index = node_index;
+  real_node_index = node_index;
   for (const auto& [node, id] :
        assignNodeIDs(real_src_nodes, node_index.size())) {
     node_index[node] = id;
@@ -1104,8 +1111,8 @@ void IRSolver::solve(sta::Scene* corner,
   debugPrint(logger_, utl::PSM, "stats", 1, "Nodes in matrix: {}", num_nodes);
 
   // create sparse matrix and vector
-  Eigen::SparseMatrix<Connection::Conductance> g_matrix(num_nodes, num_nodes);
-  Eigen::VectorXd j_vector(num_nodes);
+  g_matrix.resize(num_nodes, num_nodes);
+  j_vector.resize(num_nodes);
 
   // Build G and J
   buildCondMatrixAndVoltages(src_voltage == 0.0,
@@ -1118,6 +1125,34 @@ void IRSolver::solve(sta::Scene* corner,
   addSourcesToMatrixAndVoltages(
       src_voltage, src_nodes, node_index, g_matrix, j_vector);
 
+  return true;
+}
+
+void IRSolver::solve(sta::Scene* corner,
+                     GeneratedSourceType source_type,
+                     const std::string& source_file)
+{
+  const utl::DebugScopedTimer timer(logger_, utl::PSM, "timer", 1, "Solve: {}");
+
+  Eigen::SparseMatrix<Connection::Conductance> g_matrix;
+  Eigen::VectorXd j_vector;
+  std::map<Node*, std::size_t> real_node_index;
+  Voltage src_voltage = 0.0;
+  Power total_power = 0.0;
+
+  if (!assembleSystem(corner,
+                      source_type,
+                      source_file,
+                      g_matrix,
+                      j_vector,
+                      real_node_index,
+                      src_voltage,
+                      total_power)) {
+    return;
+  }
+
+  auto& voltages = voltages_[corner];
+
   Eigen::SparseLU<Eigen::SparseMatrix<Connection::Conductance>> eigen_solver;
 
   debugPrint(logger_, utl::PSM, "solve", 1, "Factorizing the G matrix");
@@ -1125,7 +1160,6 @@ void IRSolver::solve(sta::Scene* corner,
   if (eigen_solver.info() != Eigen::ComputationInfo::Success) {
     // decomposition failed
     if (logger_->debugCheck(utl::PSM, "dump", 1)) {
-      network_->dumpNodes(node_index);
       dumpMatrix(g_matrix, "G");
       dumpVector(j_vector, "J");
     }
@@ -1141,7 +1175,6 @@ void IRSolver::solve(sta::Scene* corner,
   if (eigen_solver.info() != Eigen::ComputationInfo::Success) {
     // solving failed
     if (logger_->debugCheck(utl::PSM, "dump", 1)) {
-      network_->dumpNodes(node_index);
       dumpMatrix(g_matrix, "G");
       dumpVector(j_vector, "J");
     }
@@ -1154,7 +1187,6 @@ void IRSolver::solve(sta::Scene* corner,
              "Solving system of equations GV=J complete");
 
   if (logger_->debugCheck(utl::PSM, "dump", 2)) {
-    network_->dumpNodes(node_index);
     dumpMatrix(g_matrix, "G");
     dumpVector(j_vector, "J");
     dumpVector(v_vector, "V");
@@ -1164,6 +1196,281 @@ void IRSolver::solve(sta::Scene* corner,
   }
   solution_voltages_[corner] = src_voltage;
   solution_power_[corner] = total_power;
+}
+
+double IRSolver::buildTransientCapacitance(
+    const TransientSettings& settings,
+    const std::map<Node*, std::size_t>& real_node_index,
+    const ValueNodeMap<Current>& currents,
+    std::size_t num_nodes,
+    Eigen::VectorXd& cap_diag) const
+{
+  cap_diag = Eigen::VectorXd::Zero(num_nodes);
+
+  // (a) Uniform per-node capacitance across every real grid node.
+  if (settings.node_cap > 0.0) {
+    for (const auto& [node, idx] : real_node_index) {
+      cap_diag[idx] += settings.node_cap;
+    }
+  }
+
+  // (b) Aggregate on-die / decap capacitance distributed across the nodes that
+  //     actually draw current (the switching sinks); fall back to all real
+  //     nodes if the current map is empty.
+  const double aggregate = settings.total_cap + settings.decap_cap;
+  if (aggregate > 0.0) {
+    std::size_t sink_count = 0;
+    for (const auto& [node, idx] : real_node_index) {
+      if (currents.count(node) != 0) {
+        sink_count++;
+      }
+    }
+    if (sink_count > 0) {
+      const double per = aggregate / static_cast<double>(sink_count);
+      for (const auto& [node, idx] : real_node_index) {
+        if (currents.count(node) != 0) {
+          cap_diag[idx] += per;
+        }
+      }
+    } else if (!real_node_index.empty()) {
+      const double per = aggregate / static_cast<double>(real_node_index.size());
+      for (const auto& [node, idx] : real_node_index) {
+        cap_diag[idx] += per;
+      }
+    }
+  }
+
+  return cap_diag.sum();
+}
+
+void IRSolver::solveTransient(sta::Scene* corner,
+                              GeneratedSourceType source_type,
+                              const std::string& source_file,
+                              const TransientSettings& settings)
+{
+  const utl::DebugScopedTimer timer(
+      logger_, utl::PSM, "timer", 1, "Transient solve: {}");
+
+  // Validate the transient controls.
+  if (settings.period <= 0.0) {
+    logger_->error(
+        utl::PSM, 100, "Transient analysis requires a positive -period.");
+  }
+  if (settings.steps < 1) {
+    logger_->error(utl::PSM, 101, "Transient analysis requires -steps >= 1.");
+  }
+  const double duty = settings.current_duty;
+  if (duty <= 0.0 || duty > 1.0) {
+    logger_->error(utl::PSM, 102, "Transient -current_duty must be in (0, 1].");
+  }
+
+  transient_min_voltages_.erase(corner);
+  transient_results_.erase(corner);
+
+  Eigen::SparseMatrix<Connection::Conductance> g_matrix;
+  Eigen::VectorXd j_vector;
+  std::map<Node*, std::size_t> real_node_index;
+  Voltage src_voltage = 0.0;
+  Power total_power = 0.0;
+
+  if (!assembleSystem(corner,
+                      source_type,
+                      source_file,
+                      g_matrix,
+                      j_vector,
+                      real_node_index,
+                      src_voltage,
+                      total_power)) {
+    return;
+  }
+
+  const std::size_t num_nodes = static_cast<std::size_t>(g_matrix.rows());
+  const bool is_ground = (src_voltage == 0.0);
+
+  // Static DC operating point: reused as the transient initial condition v0 and
+  // published so getSolution()/report() keep working unchanged.
+  Eigen::SparseLU<Eigen::SparseMatrix<Connection::Conductance>> dc_solver;
+  dc_solver.compute(g_matrix);
+  if (dc_solver.info() != Eigen::ComputationInfo::Success) {
+    logger_->error(utl::PSM,
+                   108,
+                   "Transient: LU factorization of the G Matrix failed. "
+                   "SparseLU solver message: {}.",
+                   dc_solver.lastErrorMessage());
+  }
+  const Eigen::VectorXd v_dc = dc_solver.solve(j_vector);
+  if (dc_solver.info() != Eigen::ComputationInfo::Success) {
+    logger_->error(
+        utl::PSM, 109, "Transient: solving the static V = inv(G)*J failed.");
+  }
+
+  auto& voltages = voltages_[corner];
+  for (const auto& [node, idx] : real_node_index) {
+    voltages[node] = v_dc[idx];
+  }
+  solution_voltages_[corner] = src_voltage;
+  solution_power_[corner] = total_power;
+
+  // Per-node capacitance to ground.
+  const auto& currents = currents_[corner];
+  Eigen::VectorXd cap_diag;
+  const double total_cap = buildTransientCapacitance(
+      settings, real_node_index, currents, num_nodes, cap_diag);
+  const bool quasi_static = (total_cap <= 0.0);
+
+  // Optional Stage-2 global current-vs-time profile: a normalized waveform
+  // applied to every sink in place of the vectorless triangular pulse.  Two
+  // whitespace-separated columns per line: time current (arbitrary units).
+  std::vector<double> prof_t;
+  std::vector<double> prof_s;
+  const bool use_profile = !settings.current_profile.empty();
+  if (use_profile) {
+    std::ifstream pf(settings.current_profile);
+    if (!pf) {
+      logger_->error(utl::PSM,
+                     104,
+                     "Unable to open current profile file {}.",
+                     settings.current_profile);
+    }
+    std::string line;
+    while (std::getline(pf, line)) {
+      if (line.empty() || line[0] == '#') {
+        continue;
+      }
+      std::istringstream ss(line);
+      double a = 0.0;
+      double b = 0.0;
+      if (ss >> a >> b) {
+        prof_t.push_back(a);
+        prof_s.push_back(b);
+      }
+    }
+    if (prof_t.size() < 2) {
+      logger_->error(utl::PSM,
+                     105,
+                     "Current profile {} needs at least two samples.",
+                     settings.current_profile);
+    }
+    // Normalize so the time-average over the profile window equals 1, keeping
+    // charge conservation (the average current stays I_avg).
+    const double span = prof_t.back() - prof_t.front();
+    double area = 0.0;
+    for (std::size_t i = 1; i < prof_t.size(); ++i) {
+      area += 0.5 * (prof_s[i] + prof_s[i - 1]) * (prof_t[i] - prof_t[i - 1]);
+    }
+    const double avg = (span > 0.0) ? area / span : 1.0;
+    if (avg > 0.0) {
+      for (auto& s : prof_s) {
+        s /= avg;
+      }
+    }
+  }
+  auto profile_shape = [&](double phase) -> double {
+    const double frac = phase - std::floor(phase);
+    const double tt = prof_t.front() + frac * (prof_t.back() - prof_t.front());
+    auto up = std::upper_bound(prof_t.begin(), prof_t.end(), tt);
+    if (up == prof_t.begin()) {
+      return prof_s.front();
+    }
+    if (up == prof_t.end()) {
+      return prof_s.back();
+    }
+    const std::size_t i = up - prof_t.begin();
+    const double f = (tt - prof_t[i - 1]) / (prof_t[i] - prof_t[i - 1]);
+    return prof_s[i - 1] + f * (prof_s[i] - prof_s[i - 1]);
+  };
+
+  // Time-varying current model.  Each sink's average current I_avg (already in
+  // j_vector via the static assembly, with the supply-net sign) is reshaped
+  // into a per-clock pulse.  We rewrite only the sink rows; source-injection
+  // rows keep their constant DC bias.  sign = +1 for ground, -1 for supply,
+  // matching buildCondMatrixAndVoltages.
+  const double sign = is_ground ? 1.0 : -1.0;
+
+  struct Sink
+  {
+    std::size_t idx;
+    double i_avg;
+    double center;  // normalized switching phase within the clock period
+  };
+  std::vector<Sink> sinks;
+  sinks.reserve(currents.size());
+  for (const auto& [node, idx] : real_node_index) {
+    auto cit = currents.find(node);
+    if (cit == currents.end() || cit->second == 0.0) {
+      continue;
+    }
+    double center = 0.5;  // worst case: all sinks switch together
+    if (settings.phase_spread && num_nodes > 0) {
+      center = static_cast<double>(idx) / static_cast<double>(num_nodes);
+    }
+    sinks.push_back({idx, cit->second, center});
+  }
+
+  const int steps_per_period = settings.steps;
+  const int periods = std::max(1, settings.num_periods);
+  const int nsteps = steps_per_period * periods;
+  const double dt = settings.period / steps_per_period;
+
+  const Eigen::VectorXd j_base = j_vector;
+  auto rhs_fn = [&](int /*k*/, double t) -> Eigen::VectorXd {
+    Eigen::VectorXd rhs = j_base;
+    const double phase = t / settings.period;  // clock periods elapsed
+    for (const auto& s : sinks) {
+      const double shape = use_profile ? profile_shape(phase)
+                                       : triangularPulseShape(
+                                             phase, s.center, duty);
+      rhs[s.idx] = sign * s.i_avg * shape;
+    }
+    return rhs;
+  };
+
+  TransientMNAResult tr;
+  try {
+    tr = solveTransientMNA(g_matrix,
+                           cap_diag,
+                           v_dc,
+                           dt,
+                           nsteps,
+                           rhs_fn,
+                           /*track_min=*/!is_ground);
+  } catch (const std::exception& e) {
+    logger_->error(utl::PSM, 103, "Transient solve failed: {}.", e.what());
+  }
+
+  // Extract the per-node worst voltage envelope and the global worst droop.
+  auto& tmin = transient_min_voltages_[corner];
+  Voltage worst_dyn_voltage = is_ground ? 0.0 : src_voltage;
+  for (const auto& [node, idx] : real_node_index) {
+    const Voltage vext = is_ground ? tr.v_max[idx] : tr.v_min[idx];
+    tmin[node] = vext;
+    if (is_ground) {
+      worst_dyn_voltage = std::max(worst_dyn_voltage, vext);
+    } else {
+      worst_dyn_voltage = std::min(worst_dyn_voltage, vext);
+    }
+  }
+
+  const Results static_res = getSolution(corner);
+
+  TransientResults res;
+  res.net_voltage = src_voltage;
+  res.worst_static_voltage = static_res.worst_voltage;
+  res.worst_static_ir_drop = static_res.worst_ir_drop;
+  res.worst_dynamic_voltage = worst_dyn_voltage;
+  res.worst_dynamic_ir_drop
+      = is_ground ? worst_dyn_voltage : (src_voltage - worst_dyn_voltage);
+  res.dynamic_static_ratio
+      = (static_res.worst_ir_drop != 0.0)
+            ? res.worst_dynamic_ir_drop / static_res.worst_ir_drop
+            : 0.0;
+  res.worst_time = tr.worst_time;
+  res.worst_step = tr.worst_step;
+  res.total_capacitance = total_cap;
+  res.timestep = dt;
+  res.total_steps = nsteps;
+  res.quasi_static = quasi_static;
+  transient_results_[corner] = res;
 }
 
 odb::PtrMap<odb::dbInst, IRSolver::Power> IRSolver::getInstancePower(
@@ -1477,6 +1784,107 @@ void IRSolver::reportEM(sta::Scene* corner) const
                   results.max_current);
   logger_->metric(getMetricKey("design_powergrid__current__average", corner),
                   results.avg_current);
+}
+
+bool IRSolver::hasTransientSolution(sta::Scene* corner) const
+{
+  return transient_results_.find(corner) != transient_results_.end();
+}
+
+IRSolver::TransientResults IRSolver::getTransientSolution(
+    sta::Scene* corner) const
+{
+  auto it = transient_results_.find(corner);
+  if (it != transient_results_.end()) {
+    return it->second;
+  }
+  return TransientResults{};
+}
+
+void IRSolver::reportTransient(sta::Scene* corner) const
+{
+  auto it = transient_results_.find(corner);
+  if (it == transient_results_.end()) {
+    return;
+  }
+  const auto& r = it->second;
+
+  logger_->report("########## Dynamic (transient) IR report ##########");
+  logger_->report("Net                    : {}", net_->getName());
+  logger_->report("Corner                 : {}", corner->name());
+  logger_->report("Supply voltage         : {:3.2e} V", r.net_voltage);
+  logger_->report("Timestep               : {:3.2e} s", r.timestep);
+  logger_->report("Steps                  : {}", r.total_steps);
+  if (r.quasi_static) {
+    logger_->report(
+        "Capacitance model      : quasi-static (no on-die cap supplied)");
+  } else {
+    logger_->report("On-die capacitance     : {:3.2e} F", r.total_capacitance);
+  }
+  logger_->report("Worst static IR drop   : {:3.2e} V", r.worst_static_ir_drop);
+  logger_->report("Worst dynamic IR drop  : {:3.2e} V",
+                  r.worst_dynamic_ir_drop);
+  logger_->report("Dynamic/static ratio   : {:3.2f}", r.dynamic_static_ratio);
+  logger_->report("Worst droop time       : {:3.2e} s (step {})",
+                  r.worst_time,
+                  r.worst_step);
+  logger_->report("###################################################");
+
+  logger_->metric(
+      getMetricKey("design_powergrid__drop__worst_dynamic", corner),
+      r.worst_dynamic_ir_drop);
+  logger_->metric(
+      getMetricKey("design_powergrid__drop__dynamic_static_ratio", corner),
+      r.dynamic_static_ratio);
+}
+
+void IRSolver::writeTransientVoltageFile(const std::string& voltage_file,
+                                         sta::Scene* corner) const
+{
+  if (voltage_file.empty()) {
+    return;
+  }
+
+  auto find = transient_min_voltages_.find(corner);
+  if (find == transient_min_voltages_.end()) {
+    return;
+  }
+
+  std::ofstream report(voltage_file);
+  if (!report) {
+    logger_->error(utl::PSM,
+                   106,
+                   "Unable to open {} to write transient voltage file",
+                   voltage_file);
+  }
+
+  report << "Instance,Terminal,Layer,X location,Y location,Worst Voltage\n";
+
+  const auto& voltages = find->second;
+  const double dbus = getBlock()->getDbUnitsPerMicron();
+  for (const auto& node : network_->getITermNodes()) {
+    auto vit = voltages.find(node.get());
+    if (vit == voltages.end()) {
+      continue;
+    }
+    const auto& pt = node->getPoint();
+    odb::dbTechLayer* layer = node->getLayer();
+
+    const std::string x_loc = fmt::format("{:.4f}", pt.getX() / dbus);
+    const std::string y_loc = fmt::format("{:.4f}", pt.getY() / dbus);
+    const std::string voltage = fmt::format("{:.6f}", vit->second);
+
+    odb::dbITerm* iterm = node->getITerm();
+    odb::dbInst* inst = iterm->getInst();
+    odb::dbMTerm* term = iterm->getMTerm();
+
+    report << inst->getName() << ",";
+    report << term->getName() << ",";
+    report << layer->getName() << ",";
+    report << x_loc << ",";
+    report << y_loc << ",";
+    report << voltage << '\n';
+  }
 }
 
 void IRSolver::writeErrorFile(const std::string& error_file) const

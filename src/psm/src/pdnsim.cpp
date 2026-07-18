@@ -114,6 +114,52 @@ void PDNSim::analyzePowerGrid(odb::dbNet* net,
   solver->writeInstanceVoltageFile(voltage_file, corner);
 }
 
+void PDNSim::analyzePowerGridDynamic(odb::dbNet* net,
+                                     sta::Scene* corner,
+                                     GeneratedSourceType source_type,
+                                     const std::string& voltage_file,
+                                     const std::string& error_file,
+                                     const std::string& voltage_source_file,
+                                     double period,
+                                     int steps,
+                                     int num_periods,
+                                     double node_cap,
+                                     double total_cap,
+                                     double decap_cap,
+                                     double current_duty,
+                                     bool phase_spread,
+                                     const std::string& current_profile)
+{
+  if (!checkConnectivity(net, false, error_file, false)) {
+    return;
+  }
+
+  last_net_ = net;
+  last_corner_ = corner;
+
+  IRSolver::TransientSettings settings;
+  settings.period = period;
+  settings.steps = steps;
+  settings.num_periods = num_periods;
+  settings.node_cap = node_cap;
+  settings.total_cap = total_cap;
+  settings.decap_cap = decap_cap;
+  settings.current_duty = current_duty;
+  settings.phase_spread = phase_spread;
+  settings.current_profile = current_profile;
+
+  auto* solver = getIRSolver(net, false);
+  solver->solveTransient(corner, source_type, voltage_source_file, settings);
+  solver->report(corner);
+  solver->reportTransient(corner);
+
+  if (heatmap_source_) {
+    heatmap_source_->invalidateInstances();
+  }
+
+  solver->writeTransientVoltageFile(voltage_file, corner);
+}
+
 bool PDNSim::checkConnectivity(odb::dbNet* net,
                                bool floorplanning,
                                const std::string& error_file,

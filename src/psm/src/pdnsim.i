@@ -54,11 +54,18 @@ set_net_voltage_cmd(odb::dbNet* net, Scene* corner, double voltage)
   pdnsim->setNetVoltage(net, corner, voltage);
 }
 
-void 
+void
 analyze_power_grid_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceType type, const char* error_file, bool reuse_solution, bool enable_em, const char* em_file, const char* voltage_file, const char* voltage_source_file)
 {
   PDNSim* pdnsim = getPDNSim();
   pdnsim->analyzePowerGrid(net, corner, type, voltage_file, reuse_solution, enable_em, em_file, error_file, voltage_source_file);
+}
+
+void
+analyze_power_grid_dynamic_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceType type, const char* error_file, const char* voltage_file, const char* voltage_source_file, double period, int steps, int num_periods, double node_cap, double total_cap, double decap_cap, double current_duty, bool phase_spread, const char* current_profile)
+{
+  PDNSim* pdnsim = getPDNSim();
+  pdnsim->analyzePowerGridDynamic(net, corner, type, voltage_file, error_file, voltage_source_file, period, steps, num_periods, node_cap, total_cap, decap_cap, current_duty, phase_spread, current_profile);
 }
 
 void

@@ -87,6 +87,25 @@ class PDNSim : public odb::dbBlockCallBackObj
                         const std::string& em_file,
                         const std::string& error_file,
                         const std::string& voltage_source_file);
+  // Transient / dynamic (di-dt) power-grid analysis.  Computes the static DC
+  // operating point and then time-steps the RC grid under a vectorless
+  // per-clock current model to report the worst dynamic voltage droop.  The
+  // static path (analyzePowerGrid) is unchanged.
+  void analyzePowerGridDynamic(odb::dbNet* net,
+                               sta::Scene* corner,
+                               GeneratedSourceType source_type,
+                               const std::string& voltage_file,
+                               const std::string& error_file,
+                               const std::string& voltage_source_file,
+                               double period,
+                               int steps,
+                               int num_periods,
+                               double node_cap,
+                               double total_cap,
+                               double decap_cap,
+                               double current_duty,
+                               bool phase_spread,
+                               const std::string& current_profile);
   void writeSpiceNetwork(odb::dbNet* net,
                          sta::Scene* corner,
                          GeneratedSourceType source_type,

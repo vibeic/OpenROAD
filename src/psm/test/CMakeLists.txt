@@ -28,6 +28,7 @@ or_integration_tests(
     gcd_sky130_vdd
     gcd_test_assign_power
     gcd_test_vdd
+    gcd_transient_vdd
     gcd_vss_no_vsrc
     gcd_write_sp_test_vdd
     insert_decap1
@@ -40,5 +41,9 @@ or_integration_tests(
     zerosoc_pads
     zerosoc_pads_check_only
     zerosoc_pads_check_only_disconnected
+  PASSFAIL_TESTS
+    cpp_tests
 )
+
+add_subdirectory(cpp)
 

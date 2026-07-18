@@ -42,13 +42,24 @@ sta::define_cmd_args "analyze_power_grid" {
   [-vsrc voltage_source_file]
   [-source_type FULL|BUMPS|STRAPS]
   [-allow_reuse]
+  [-transient]
+  [-period period]
+  [-steps steps]
+  [-num_periods num_periods]
+  [-node_cap cap]
+  [-total_cap cap]
+  [-decap_cap cap]
+  [-current_duty duty]
+  [-spread_phases]
+  [-current_profile file]
 }
 
 proc analyze_power_grid { args } {
   sta::parse_key_args "analyze_power_grid" args \
     keys {-net -corner -voltage_file -error_file -em_outfile -vsrc \
-      -source_type} \
-    flags {-enable_em -allow_reuse}
+      -source_type -period -steps -num_periods -node_cap -total_cap \
+      -decap_cap -current_duty -current_profile} \
+    flags {-enable_em -allow_reuse -transient -spread_phases}
   if { ![info exists keys(-net)] } {
     utl::error PSM 58 "Argument -net not specified."
   }
@@ -71,6 +82,63 @@ proc analyze_power_grid { args } {
   set source_type "BUMPS"
   if { [info exists keys(-source_type)] } {
     set source_type $keys(-source_type)
+  }
+
+  # Transient (dynamic / di-dt) analysis path.  Fully backward compatible: the
+  # command is byte-identical to the static path unless -transient is given.
+  if { [info exists flags(-transient)] } {
+    if { ![info exists keys(-period)] } {
+      utl::error PSM 107 "Transient analysis requires -period."
+    }
+    set period [sta::time_ui_sta $keys(-period)]
+
+    set steps 100
+    if { [info exists keys(-steps)] } {
+      set steps $keys(-steps)
+    }
+    set num_periods 1
+    if { [info exists keys(-num_periods)] } {
+      set num_periods $keys(-num_periods)
+    }
+    set node_cap 0.0
+    if { [info exists keys(-node_cap)] } {
+      set node_cap [sta::capacitance_ui_sta $keys(-node_cap)]
+    }
+    set total_cap 0.0
+    if { [info exists keys(-total_cap)] } {
+      set total_cap [sta::capacitance_ui_sta $keys(-total_cap)]
+    }
+    set decap_cap 0.0
+    if { [info exists keys(-decap_cap)] } {
+      set decap_cap [sta::capacitance_ui_sta $keys(-decap_cap)]
+    }
+    set current_duty 1.0
+    if { [info exists keys(-current_duty)] } {
+      set current_duty $keys(-current_duty)
+    }
+    set phase_spread [info exists flags(-spread_phases)]
+    set current_profile ""
+    if { [info exists keys(-current_profile)] } {
+      set current_profile $keys(-current_profile)
+    }
+
+    psm::analyze_power_grid_dynamic_cmd \
+      [psm::find_net $keys(-net)] \
+      [sta::parse_scene_or_default keys] \
+      $source_type \
+      $error_file \
+      $voltage_file \
+      $voltage_source_file \
+      $period \
+      $steps \
+      $num_periods \
+      $node_cap \
+      $total_cap \
+      $decap_cap \
+      $current_duty \
+      $phase_spread \
+      $current_profile
+    return
   }
 
   set enable_em [info exists flags(-enable_em)]

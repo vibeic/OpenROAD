@@ -65,6 +65,40 @@ class IRSolver
     std::set<ITermNode*, Node::Compare> unconnected_iterms;
   };
 
+  // Knobs for a transient (dynamic / di-dt) power-grid analysis.  All defaults
+  // reproduce a physically-meaningful vectorless worst case with no external
+  // input required; every field is overridable from the Tcl command.
+  struct TransientSettings
+  {
+    double period = 0.0;      // clock period [s] (must be > 0)
+    int steps = 100;          // timesteps per clock period
+    int num_periods = 1;      // number of clock periods to simulate
+    double node_cap = 0.0;    // uniform per-node capacitance to ground [F]
+    double total_cap = 0.0;   // total on-die cap distributed across sink nodes
+    double decap_cap = 0.0;   // aggregate decap contribution added to total_cap
+    double current_duty = 1.0;  // triangular current-pulse duty in (0,1]
+    bool phase_spread = false;  // false: worst-case simultaneous switching
+    std::string current_profile;  // optional global current-vs-time waveform
+  };
+
+  // Results of a transient analysis, alongside the static reference so callers
+  // can report the dynamic/static droop ratio.
+  struct TransientResults
+  {
+    Voltage net_voltage = 0.0;
+    Voltage worst_static_voltage = 0.0;
+    Voltage worst_static_ir_drop = 0.0;
+    Voltage worst_dynamic_voltage = 0.0;
+    Voltage worst_dynamic_ir_drop = 0.0;
+    double dynamic_static_ratio = 0.0;
+    double worst_time = 0.0;  // [s]
+    int worst_step = -1;
+    double total_capacitance = 0.0;  // [F] actually applied to the grid
+    double timestep = 0.0;           // [s]
+    int total_steps = 0;
+    bool quasi_static = false;  // true when no capacitance was supplied
+  };
+
   using UserVoltages = odb::PtrMap<odb::dbNet, std::map<sta::Scene*, Voltage>>;
   using UserPowers = odb::PtrMap<odb::dbInst, std::map<sta::Scene*, Power>>;
 
@@ -85,10 +119,24 @@ class IRSolver
              GeneratedSourceType source_type,
              const std::string& source_file);
 
+  // Transient (dynamic) solve: computes the static DC operating point, then
+  // time-steps the RC power grid under a per-clock triangular current model to
+  // find the worst dynamic voltage droop.  Leaves the static solution in place
+  // (getSolution stays valid) and stores the dynamic envelope separately.
+  void solveTransient(sta::Scene* corner,
+                      GeneratedSourceType source_type,
+                      const std::string& source_file,
+                      const TransientSettings& settings);
+
   void report(sta::Scene* corner) const;
   void reportEM(sta::Scene* corner) const;
+  void reportTransient(sta::Scene* corner) const;
 
   Results getSolution(sta::Scene* corner) const;
+  TransientResults getTransientSolution(sta::Scene* corner) const;
+  bool hasTransientSolution(sta::Scene* corner) const;
+  void writeTransientVoltageFile(const std::string& voltage_file,
+                                 sta::Scene* corner) const;
   EMResults getEMSolution(sta::Scene* corner) const;
   PDNSim::IRDropByPoint getIRDrop(odb::dbTechLayer* layer,
                                   sta::Scene* corner) const;
@@ -188,6 +236,32 @@ class IRSolver
       Eigen::SparseMatrix<Connection::Conductance>& g_matrix,
       Eigen::VectorXd& j_vector) const;
 
+  // Assembles the linear system (G, J) shared by the static and transient
+  // solves.  Fills currents_[corner] with the per-node average current and
+  // clears voltages_[corner].  Returns false (and leaves the caches erased)
+  // when the net has no nodes.  real_node_index maps only real (non-source-
+  // helper) grid nodes back to their matrix row so the caller can extract
+  // per-node voltages; the source-helper rows occupy the remaining indices up
+  // to g_matrix.rows().
+  bool assembleSystem(
+      sta::Scene* corner,
+      GeneratedSourceType source_type,
+      const std::string& source_file,
+      Eigen::SparseMatrix<Connection::Conductance>& g_matrix,
+      Eigen::VectorXd& j_vector,
+      std::map<Node*, std::size_t>& real_node_index,
+      Voltage& src_voltage,
+      Power& total_power);
+
+  // Builds the per-node capacitance-to-ground vector for a transient solve,
+  // indexed to match node_index.  Returns the total capacitance applied.
+  double buildTransientCapacitance(
+      const TransientSettings& settings,
+      const std::map<Node*, std::size_t>& real_node_index,
+      const ValueNodeMap<Current>& currents,
+      std::size_t num_nodes,
+      Eigen::VectorXd& cap_diag) const;
+
   std::string getMetricKey(const std::string& key, sta::Scene* corner) const;
 
   void dumpVector(const Eigen::VectorXd& vector, const std::string& name) const;
@@ -218,6 +292,11 @@ class IRSolver
 
   std::map<sta::Scene*, ValueNodeMap<Voltage>> voltages_;
   std::map<sta::Scene*, ValueNodeMap<Current>> currents_;
+
+  // Per-node minimum voltage over the transient window, and the summary
+  // results, keyed by corner.  Populated only by solveTransient().
+  std::map<sta::Scene*, ValueNodeMap<Voltage>> transient_min_voltages_;
+  std::map<sta::Scene*, TransientResults> transient_results_;
 
   static constexpr Current kSpiceFileMinCurrent = 1e-18;
 };
