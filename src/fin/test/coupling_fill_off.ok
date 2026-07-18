@@ -18,15 +18,31 @@
 [WARNING FIN-0010] Skipping layer met5.
 no-relief met1 fills 3784 min gap to crit 3000
 PASS unrelieved fill intrudes into the halo (gap 3000 < 5000)
---- halo band with NO relief: expect violations ---
-[INFO FIN-0013] Layer met1 window (144000, 0) (156000, 12000) density 0.3889 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 12000) (156000, 24000) density 0.3877 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 24000) (156000, 36000) density 0.3880 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 36000) (156000, 48000) density 0.3886 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 48000) (156000, 60000) density 0.3822 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 60000) (156000, 72000) density 0.3883 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 72000) (156000, 84000) density 0.3882 is outside [0.1666, 0.1667].
-[INFO FIN-0013] Layer met1 window (144000, 84000) (156000, 96000) density 0.3877 is outside [0.1666, 0.1667].
-[INFO FIN-0014] Layer met1: 8 windows, density 0.3822 to 0.3889, 8 violations.
-violations 8
-[INFO FIN-0014] Layer met1: 8 windows, density 0.3822 to 0.3889, 0 violations.
+--- halo band with NO relief: expect 54 = every window, met1 included ---
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.388875 (layer met1)
+Under-density       : 45
+Over-density        : 9
+Violations          : 54
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 54 window(s) outside the per-layer density band (45 under, 9 over).
+band_viol 54
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.388875 (layer met1)
+Under-density       : 45
+Over-density        : 9
+Violations          : 54
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 54 window(s) outside the per-layer density band (45 under, 9 over).

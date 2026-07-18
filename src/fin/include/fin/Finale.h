@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <string>
+
+#include "fin/density_check.h"
 #include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "odb/geom.h"
@@ -31,14 +34,14 @@ class Finale
                    const odb::PtrSet<odb::dbNet>& critical_nets,
                    int critical_halo);
 
-  // Report metal-density windows outside [min_density, max_density].
-  // Returns the number of violating windows.
-  int checkDensity(const odb::Rect& area,
-                   int window,
-                   int step,
-                   double min_density,
-                   double max_density,
-                   const char* layer_name);
+  // Metal density check (FL1): measure per-window, per-layer metal density over
+  // check_area and flag every window outside the per-layer [min, max] band.
+  // window/step are in DBU; a non-positive step means step = window.
+  DensityCheckResult checkDensity(const odb::Rect& check_area,
+                                  int window,
+                                  int step,
+                                  const DensityLimits& limits,
+                                  const std::string& report_file);
 
   void setDebug();
 

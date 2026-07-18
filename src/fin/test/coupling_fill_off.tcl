@@ -18,7 +18,13 @@ if { $gap < 5000 } {
   puts "FAIL unrelieved fill already respects the halo (test is vacuous)"
 }
 
-puts "--- halo band with NO relief: expect violations ---"
-puts "violations [check_metal_density -layer met1 -window 12 -step 12 \
+# Without relief met1's 9 band windows fill to 0.388875, well above the band,
+# so they flip from clean to over-density and ALL 54 windows violate.  The
+# delta against coupling_fill is exactly 9 -- met1's windows -- which is the
+# unfakeable part: 54 vs 45 is the halo doing its job, nothing else moved.
+puts "--- halo band with NO relief: expect 54 = every window, met1 included ---"
+puts "band_viol [check_metal_density -window 12 -step 12 \
   -area {144 0 156 100} -min_density 0.1666 -max_density 0.1667]"
-check_metal_density -layer met1 -window 12 -step 12 -area {144 0 156 100}
+check_metal_density -window 12 -step 12 -area {144 0 156 100} \
+  -min_density 0.1666 -max_density 0.1667 \
+  -report_file [make_result_file coupling_fill_off_band.rpt]

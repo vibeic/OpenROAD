@@ -52,18 +52,25 @@ The halo is applied on top of the rule file's `space_to_non_fill`.
 
 ### Check Metal Density
 
-Reports the measured metal density of each sliding window and returns the
-number of windows falling outside `[-min_density, -max_density]`. Routing,
-special wires, instance shapes and existing fill all count as metal.
+Measures per-window, per-layer metal density and flags every window outside the
+per-layer `[min, max]` band. This is the signoff half of the fill flow: it is
+the measurement that decides whether fill is needed at all, whether the fill
+that ran was enough, and whether it overshot.
+
+The measured quantity is the UNION area of all metal on the layer — signal
+routing, special (power) routing, instance pins and OBS, and any dummy fill
+already inserted — clipped to the window, so overlapping shapes are counted
+once. That is the same quantity a foundry density deck measures.
 
 ```tcl
 check_metal_density
     -window window
     [-step step]
-    [-area {lx ly ux uy}]
     [-min_density density]
     [-max_density density]
-    [-layer layer]
+    [-limits_file file]
+    [-report_file file]
+    [-area {lx ly ux uy}]
 ```
 
 #### Options
@@ -71,14 +78,40 @@ check_metal_density
 | Switch Name | Description | 
 | ----- | ----- |
 | `-window` | Window edge length in microns. |
-| `-step` | Optional. Window slide in microns; defaults to `-window`. |
+| `-step` | Optional. Window slide in microns; a non-positive step means `step = window` (tiled, no overlap). |
+| `-min_density` | Optional. Default lower bound as a fraction in `[0,1]`. |
+| `-max_density` | Optional. Default upper bound as a fraction in `[0,1]`. |
+| `-limits_file` | Optional. Per-layer bands, which override the defaults for the layers they name. |
+| `-report_file` | Optional. Write the per-window report to this file. |
 | `-area` | Optional. If not specified, the core area will be used. |
-| `-min_density` | Optional. Lower bound, default `0.0`. |
-| `-max_density` | Optional. Upper bound, default `1.0`. |
-| `-layer` | Optional. Restrict the check to one layer; default is every routing layer. |
 
-Only windows lying entirely inside the area are evaluated, so a window never
-reports an artificially low density from hanging off the die edge.
+The band is foundry data. Where none is supplied the check reports every window
+as `NO_LIMIT` and cannot fail — it will not manufacture a verdict it has no
+data for. Bounds are inclusive. An edge window is clipped to the check area and
+measured against its own smaller area, so an under-dense strip at the die edge
+is still caught rather than silently dropped; a window that clips away entirely
+is skipped, never flagged.
+
+### How the two halves fit together
+
+`density_fill` and `check_metal_density` share ONE measurement core
+(`fin/density_check.h` plus `DensityCheck`). When `density_fill` is given a
+density target it runs that same core to decide which windows are short and how
+much room each has left, so the windows the fill tops up are exactly the windows
+the check later judges. They cannot disagree about what a window is or what it
+contains.
+
+The division of labour:
+
+| | `check_metal_density` | `density_fill` |
+| ----- | ----- | ----- |
+| Role | signoff — measure and judge | actuator — make it compliant |
+| Answers | is this design within the band? | fill the short windows, without overshooting |
+| Needs a band? | yes, or it reports `NO_LIMIT` | only if you pass a density target |
+
+Note this is the DEF-stage pair. It is complementary to, not a replacement for,
+a post-streamout GDS density pass: fill inserted here is visible to routing and
+extraction, which is precisely why it has to be bounded by `-max_density`.
 
 ## Example scripts
 

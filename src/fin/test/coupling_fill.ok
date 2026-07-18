@@ -6,7 +6,7 @@
 [WARNING FIN-0010] Skipping layer li1.
 [WARNING FIN-0010] Skipping layer mcon.
 [INFO FIN-0003] Filling layer met1.
-[INFO FIN-0024] Layer met1: holding fill 5000 DBU away from 1 critical nets.
+[INFO FIN-0048] Layer met1: holding fill 5000 DBU away from 1 critical nets.
 [INFO FIN-0009] Filling 2 areas with non-OPC fill.
 [INFO FIN-0004] Total fills: 3500.
 [WARNING FIN-0010] Skipping layer via.
@@ -19,9 +19,45 @@
 [WARNING FIN-0010] Skipping layer met5.
 relief met1 fills 3500 min gap to crit 5000
 PASS min gap 5000 >= 5000
---- halo band: expect 0 violations ---
-[INFO FIN-0014] Layer met1: 8 windows, density 0.1667 to 0.1667, 0 violations.
-violations 0
-[INFO FIN-0014] Layer met1: 8 windows, density 0.1667 to 0.1667, 0 violations.
+--- halo band: expect 45 = 54 - met1's 9 clean windows ---
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.166667 (layer met1)
+Under-density       : 45
+Over-density        : 0
+Violations          : 45
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 45 window(s) outside the per-layer density band (45 under, 0 over).
+band_viol 45
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.166667 (layer met1)
+Under-density       : 45
+Over-density        : 0
+Violations          : 45
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 45 window(s) outside the per-layer density band (45 under, 0 over).
 --- outside the halo: fill is still present ---
-[INFO FIN-0014] Layer met1: 8 windows, density 0.7438 to 0.7656, 0 violations.
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.765625 (layer met1)
+Under-density       : 45
+Over-density        : 0
+Violations          : 45
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 45 window(s) outside the per-layer density band (45 under, 0 over).

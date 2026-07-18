@@ -3,6 +3,7 @@
 
 #include "fin/Finale.h"
 
+#include "DensityCheck.h"
 #include "DensityFill.h"
 #include "odb/db.h"
 #include "odb/geom.h"
@@ -53,23 +54,14 @@ void Finale::densityFill(const char* rules_filename,
   filler.fill(rules_filename, fill_area, target, coupling);
 }
 
-int Finale::checkDensity(const odb::Rect& area,
-                         int window,
-                         int step,
-                         double min_density,
-                         double max_density,
-                         const char* layer_name)
+DensityCheckResult Finale::checkDensity(const odb::Rect& check_area,
+                                        int window,
+                                        int step,
+                                        const DensityLimits& limits,
+                                        const std::string& report_file)
 {
-  odb::dbTechLayer* layer = nullptr;
-  if (layer_name && layer_name[0] != '\0') {
-    layer = db_->getTech()->findLayer(layer_name);
-    if (!layer) {
-      logger_->error(utl::FIN, 20, "Layer {} not found.", layer_name);
-    }
-  }
-  DensityFill filler(db_, logger_, debug_);
-  return filler.checkDensity(
-      area, window, step, min_density, max_density, layer);
+  DensityCheck checker(db_, logger_);
+  return checker.check(check_area, window, step, limits, report_file);
 }
 
 }  // namespace fin

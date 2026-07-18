@@ -9,7 +9,7 @@ read_def density_window.def
 
 density_fill -rules fill_met1.json
 
-puts "--- uncapped fill: expect BOTH windows above the 0.40 cap ---"
-puts "violations [check_metal_density -layer met1 -window 100 -step 100 \
-  -max_density 0.40]"
-check_metal_density -layer met1 -window 100 -step 100
+puts "--- uncapped fill: expect BOTH met1 windows above the 0.40 cap ---"
+puts "over_cap [check_metal_density -window 100 -step 100 -max_density 0.40]"
+check_metal_density -window 100 -step 100 -min_density 0.10 -max_density 0.40 \
+  -report_file [make_result_file density_window_uncapped.rpt]

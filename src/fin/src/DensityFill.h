@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "boost/property_tree/json_parser.hpp"
+#include "fin/density_check.h"
 #include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "odb/geom.h"
@@ -19,11 +20,10 @@ struct DensityFillLayerConfig;
 class DensityBudget;
 class Graphics;
 
-// Per-layer density targets and window geometry used both to steer fill
-// insertion and to audit the result.  A window is a fixed-size square that
-// slides over the area in `step` increments; only windows lying entirely
-// inside the area are evaluated (if the area is smaller than one window a
-// single window clamped to the area is used instead).
+// Per-layer density targets and window geometry that steer fill insertion.
+// The windows themselves are measured by DensityCheck (the one measurement
+// core, shared with the check_metal_density signoff command) so that fill and
+// signoff can never disagree about what a window is or what it contains.
 struct DensityTarget
 {
   bool enabled = false;
@@ -40,15 +40,6 @@ struct CouplingRelief
 {
   odb::PtrSet<odb::dbNet> nets;
   int halo = 0;  // DBU
-};
-
-// The measured metal density of one window.
-struct DensityWindow
-{
-  odb::Rect bounds;
-  int64_t metal_area = 0;   // DBU^2 of metal inside the window
-  int64_t window_area = 0;  // DBU^2 of the window itself
-  double density = 0.0;     // metal_area / window_area
 };
 
 ////////////////////////////////////////////////////////////////
@@ -71,22 +62,6 @@ class DensityFill
             const DensityTarget& target,
             const CouplingRelief& coupling);
 
-  // Measure the metal density of `layer` over `area` in sliding windows.
-  // Includes routing, special wires, instance shapes and any existing fill.
-  std::vector<DensityWindow> measureDensity(odb::dbTechLayer* layer,
-                                            const odb::Rect& area,
-                                            int window,
-                                            int step);
-
-  // Measure every layer that has a routing direction and report windows
-  // outside [min_density, max_density].  Returns the violation count.
-  int checkDensity(const odb::Rect& area,
-                   int window,
-                   int step,
-                   double min_density,
-                   double max_density,
-                   odb::dbTechLayer* only_layer);
-
  private:
   void loadConfig(const char* cfg_filename, odb::dbTech* tech);
   void readAndExpandLayers(odb::dbTech* tech,
@@ -95,12 +70,8 @@ class DensityFill
                  odb::dbTechLayer* layer,
                  const odb::Rect& fill_bounds,
                  const DensityTarget& target,
-                 const CouplingRelief& coupling);
-
-  // Enumerate the window rectangles used by measurement and budgeting.
-  static std::vector<odb::Rect> windowRects(const odb::Rect& area,
-                                            int window,
-                                            int step);
+                 const CouplingRelief& coupling,
+                 const DensityCheckResult& measured);
 
   odb::dbDatabase* db_;
   odb::PtrMap<odb::dbTechLayer, DensityFillLayerConfig> layers_;

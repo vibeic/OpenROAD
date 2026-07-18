@@ -21,13 +21,13 @@ proc parse_area { area_arg } {
 
 proc check_density_range { min_density max_density } {
   if { $min_density < 0.0 || $min_density > 1.0 } {
-    utl::error FIN 21 "min_density must be between 0.0 and 1.0."
+    utl::error FIN 40 "min_density must be between 0.0 and 1.0."
   }
   if { $max_density < 0.0 || $max_density > 1.0 } {
-    utl::error FIN 22 "max_density must be between 0.0 and 1.0."
+    utl::error FIN 41 "max_density must be between 0.0 and 1.0."
   }
   if { $min_density > $max_density } {
-    utl::error FIN 23 "min_density must not exceed max_density."
+    utl::error FIN 42 "min_density must not exceed max_density."
   }
 }
 }
@@ -79,7 +79,7 @@ proc density_fill { args } {
   if { $density_target } {
     fin::check_density_range $min_density $max_density
     if { ![info exists keys(-density_window)] } {
-      utl::error FIN 16 "-density_window must be specified with\
+      utl::error FIN 43 "-density_window must be specified with\
         -min_density/-max_density."
     }
     set window [ord::microns_to_dbu $keys(-density_window)]
@@ -89,7 +89,7 @@ proc density_fill { args } {
       set step $window
     }
     if { $window <= 0 || $step <= 0 } {
-      utl::error FIN 17 "-density_window and -density_step must be positive."
+      utl::error FIN 44 "-density_window and -density_step must be positive."
     }
   }
 
@@ -102,63 +102,74 @@ proc density_fill { args } {
   if { [info exists keys(-critical_halo)] } {
     set critical_halo [ord::microns_to_dbu $keys(-critical_halo)]
     if { $critical_halo <= 0 } {
-      utl::error FIN 26 "-critical_halo must be positive."
+      utl::error FIN 45 "-critical_halo must be positive."
     }
   }
   if { $critical_nets ne "" && $critical_halo == 0 } {
-    utl::error FIN 27 "-critical_halo must be specified with -critical_nets."
+    utl::error FIN 46 "-critical_halo must be specified with -critical_nets."
   }
 
   fin::density_fill_cmd $rules_file $fill_area $density_target \
     $window $step $min_density $max_density $critical_nets $critical_halo
 }
 
-sta::define_cmd_args "check_metal_density" {[-area {lx ly ux uy}]\
-                                            [-window window]\
+sta::define_cmd_args "check_metal_density" {[-window window]\
                                             [-step step]\
                                             [-min_density density]\
                                             [-max_density density]\
-                                            [-layer layer]}
+                                            [-limits_file file]\
+                                            [-report_file file]\
+                                            [-area {lx ly ux uy}]}
 
 proc check_metal_density { args } {
   sta::parse_key_args "check_metal_density" args \
-    keys {-area -window -step -min_density -max_density -layer} flags {}
+    keys {-window -step -min_density -max_density -limits_file -report_file \
+          -area} \
+    flags {}
 
   if { ![info exists keys(-window)] } {
-    utl::error FIN 18 "The -window argument must be specified."
+    utl::error FIN 26 "The -window argument must be specified."
   }
   set window [ord::microns_to_dbu $keys(-window)]
+
+  set step 0
   if { [info exists keys(-step)] } {
     set step [ord::microns_to_dbu $keys(-step)]
-  } else {
-    set step $window
-  }
-  if { $window <= 0 || $step <= 0 } {
-    utl::error FIN 19 "-window and -step must be positive."
   }
 
-  set min_density 0.0
-  set max_density 1.0
+  set min_density -1.0
   if { [info exists keys(-min_density)] } {
     set min_density $keys(-min_density)
   }
+
+  set max_density -1.0
   if { [info exists keys(-max_density)] } {
     set max_density $keys(-max_density)
   }
-  fin::check_density_range $min_density $max_density
 
-  # An empty layer name means every routing layer.
-  set layer_name ""
-  if { [info exists keys(-layer)] } {
-    set layer_name $keys(-layer)
+  set limits_file ""
+  if { [info exists keys(-limits_file)] } {
+    set limits_file $keys(-limits_file)
   }
 
-  set area_arg ""
+  set report_file ""
+  if { [info exists keys(-report_file)] } {
+    set report_file $keys(-report_file)
+  }
+
   if { [info exists keys(-area)] } {
-    set area_arg $keys(-area)
+    set area $keys(-area)
+    if { [llength $area] != 4 } {
+      utl::error FIN 27 "The -area argument must be a list of 4 coordinates."
+    }
+    lassign $area lx ly ux uy
+    set check_area [odb::Rect x [ord::microns_to_dbu $lx] \
+      [ord::microns_to_dbu $ly] [ord::microns_to_dbu $ux] \
+      [ord::microns_to_dbu $uy]]
+  } else {
+    set check_area [ord::get_db_core]
   }
-  set check_area [fin::parse_area $area_arg]
 
   return [fin::check_metal_density_cmd $check_area $window $step \
-    $min_density $max_density $layer_name]
+    $min_density $max_density $limits_file $report_file]
 }

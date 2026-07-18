@@ -32,11 +32,18 @@ if { $count == 0 } {
 }
 
 # Density gate over the keep-out band: the net and nothing else.
-puts "--- halo band: expect 0 violations ---"
-puts "violations [check_metal_density -layer met1 -window 12 -step 12 \
+# The shared check covers EVERY routing layer, so the band is judged on all 6
+# (li1, met1..met5) x 9 windows = 54.  Only met1 carries metal, so met1's 9
+# windows sit in the band at 0.166667 and the other 45 are empty and flag
+# under-density.  45 is therefore the "relief worked" signal: met1 clean.
+puts "--- halo band: expect 45 = 54 - met1's 9 clean windows ---"
+puts "band_viol [check_metal_density -window 12 -step 12 \
   -area {144 0 156 100} -min_density 0.1666 -max_density 0.1667]"
-check_metal_density -layer met1 -window 12 -step 12 -area {144 0 156 100}
+check_metal_density -window 12 -step 12 -area {144 0 156 100} \
+  -min_density 0.1666 -max_density 0.1667 \
+  -report_file [make_result_file coupling_fill_band.rpt]
 
 # Fill away from the critical net is untouched.
 puts "--- outside the halo: fill is still present ---"
-check_metal_density -layer met1 -window 12 -step 12 -area {100 0 112 100}
+check_metal_density -window 12 -step 12 -area {100 0 112 100} \
+  -min_density 0.10 -max_density 0.90

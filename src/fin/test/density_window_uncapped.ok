@@ -16,9 +16,31 @@
 [WARNING FIN-0010] Skipping layer met4.
 [WARNING FIN-0010] Skipping layer via4.
 [WARNING FIN-0010] Skipping layer met5.
---- uncapped fill: expect BOTH windows above the 0.40 cap ---
-[INFO FIN-0013] Layer met1 window (0, 0) (100000, 100000) density 0.7761 is outside [0.0000, 0.4000].
-[INFO FIN-0013] Layer met1 window (100000, 0) (200000, 100000) density 0.7550 is outside [0.0000, 0.4000].
-[INFO FIN-0014] Layer met1: 2 windows, density 0.7550 to 0.7761, 2 violations.
-violations 2
-[INFO FIN-0014] Layer met1: 2 windows, density 0.7550 to 0.7761, 0 violations.
+--- uncapped fill: expect BOTH met1 windows above the 0.40 cap ---
+########## Metal density check ##########
+Window / step       : 100.0000 / 100.0000 um
+Windows measured    : 12
+With density band   : 12
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.776115 (layer met1)
+Under-density       : 0
+Over-density        : 2
+Violations          : 2
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 2 window(s) outside the per-layer density band (0 under, 2 over).
+over_cap 2
+########## Metal density check ##########
+Window / step       : 100.0000 / 100.0000 um
+Windows measured    : 12
+With density band   : 12
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.776115 (layer met1)
+Under-density       : 10
+Over-density        : 2
+Violations          : 12
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 12 window(s) outside the per-layer density band (10 under, 2 over).
