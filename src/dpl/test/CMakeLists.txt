@@ -18,6 +18,8 @@ or_integration_tests(
     check7
     check8
     check9
+    check_no_abort
+    check_no_abort_clean
     fence01
     fence02
     fence03
@@ -52,6 +54,7 @@ or_integration_tests(
     multi_height_power_align
     multi_height_rows
     negotiation01
+    negotiation_no_converge
     negotiation_one_site_gap
     negotiation_regions
     obstruction1

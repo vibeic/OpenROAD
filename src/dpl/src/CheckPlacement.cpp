@@ -24,8 +24,9 @@ using utl::DPL;
 
 using utl::format_as;  // NOLINT(misc-unused-using-decls)
 
-void Opendp::checkPlacement(const bool verbose,
-                            const std::string& report_file_name)
+int Opendp::checkPlacement(const bool verbose,
+                           const std::string& report_file_name,
+                           const bool no_abort)
 {
   importDb();
   adjustNodesOrient();
@@ -127,20 +128,49 @@ void Opendp::checkPlacement(const bool verbose,
                       + overlap_failures.size() + padding_failures.size()
                       + site_align_failures.size());
 
-  if (placed_failures.size() + in_rows_failures.size() + overlap_failures.size()
-          + padding_failures.size() + site_align_failures.size()
-          + (disallow_one_site_gaps_ ? one_site_gap_failures.size() : 0)
-          + region_placement_failures.size() + edge_spacing_failures.size()
-          + blocked_layers_failures.size()
-      > 0) {
-    // Severity reclassification (DPL-0033): downgraded from a fatal
-    // logger_->error (which throws and aborts the command/process) to a
-    // recoverable warning so check_placement returns control to the caller.
-    // The individual violations were already reported above; a wrapping flow
-    // can inspect them and repair instead of the whole process aborting.
-    logger_->warn(
-        DPL, 33, "detailed placement checks failed during check placement.");
+  const int violations
+      = static_cast<int>(placed_failures.size() + in_rows_failures.size()
+                         + overlap_failures.size() + padding_failures.size()
+                         + site_align_failures.size()
+                         + (disallow_one_site_gaps_
+                                ? one_site_gap_failures.size()
+                                : 0)
+                         + region_placement_failures.size()
+                         + edge_spacing_failures.size()
+                         + blocked_layers_failures.size());
+
+  if (violations > 0) {
+    // A remaining violation is a real physical defect (overlap, off-site,
+    // out-of-row, ...), so it must never be reported as success. Severity is
+    // therefore chosen by the caller's explicit contract, not softened
+    // globally:
+    //
+    //   default (no_abort=false) -- fatal. logger_->error throws, which the
+    //     SWIG %exception in src/Exception.i turns into a catchable TCL_ERROR.
+    //     A wrapping flow that wants to recover simply wraps the call in
+    //     `catch`, which is what our post-route repair flow already does; an
+    //     unwrapped flow correctly aborts with a non-zero exit status.
+    //
+    //   no_abort=true -- the caller has stated it will handle the result, so
+    //     we warn under a DISTINCT id (DPL-40) and return the violation count.
+    //     The caller is then obliged to consult that count. Returning a number
+    //     is what makes the outcome machine-visible: a warning nobody can
+    //     consult is indistinguishable from a silent pass. The id differs from
+    //     DPL-33 on purpose -- "failed, and I aborted" and "failed, and I
+    //     handed the count back" are different events, and a log grep must be
+    //     able to tell them apart.
+    if (no_abort) {
+      logger_->warn(DPL,
+                    40,
+                    "detailed placement checks failed during check placement: "
+                    "{} violation(s) returned to caller.",
+                    violations);
+    } else {
+      logger_->error(
+          DPL, 33, "detailed placement checks failed during check placement.");
+    }
   }
+  return violations;
 }
 
 void Opendp::saveViolations(const std::vector<Node*>& failures,
