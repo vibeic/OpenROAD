@@ -427,8 +427,12 @@ void ClockTreeAnalysis::reportSkew(bool verbose)
         maxArr = std::max(maxArr, a);
       }
       logger_->report(
-          "  scene {}: min insertion delay {:.4f} ns, max {:.4f} ns, skew "
-          "{:.4f} ns",
+          // "earliest/latest sink", not "min/max corner": every arrival here
+          // is a max-delay (late) path, and the spread is across sinks within
+          // this one scene.  Saying "min/max" alone reads as a min/max corner
+          // spread, which is a different number entirely.
+          "  scene {}: max-delay insertion delay, earliest sink {:.4f} ns, "
+          "latest sink {:.4f} ns, skew {:.4f} ns",
           scenes_[s]->name(),
           minArr * 1e9,
           maxArr * 1e9,

@@ -98,3 +98,52 @@ if { $i_fast < $i_typ && $i_typ < $i_slow } {
   puts [format "FAIL insertion delay not monotonic: fast %.4f typ %.4f slow %.4f ns" \
     [expr { $i_fast * 1e9 }] [expr { $i_typ * 1e9 }] [expr { $i_slow * 1e9 }]]
 }
+
+# PROVEN NEGATIVE, load-bearing: the reported skew has to TRACK the injected
+# asymmetry, not merely be nonzero once.  A metric that always prints ~0 --
+# or that prints one stuck value -- would be worse than no metric at all, and
+# every check above still passes for a stuck-but-nonzero implementation.
+#
+# ff4 is walked away from buf2 in four steps.  At each step the reported skew
+# is checked against STA's own arrival difference between the two sinks,
+# obtained through get_property, which reaches the number by a different code
+# path than the CTS tree walk.  Then the sequence is required to be strictly
+# increasing with distance and to span a real dynamic range.
+puts "Injected-asymmetry sweep on clk2 (typical scene):"
+set ff4 [[ord::get_db_block] findInst ff4]
+set sweep {}
+foreach x {110000 140000 190000 380000} {
+  $ff4 setLocation $x 40000
+  estimate_parasitics -placement
+  set mine [expr { [cts_clock_skew clk2 -scene typical] * 1e9 }]
+  set a3 [get_property [get_pin ff3/CK] arrival_max_rise]
+  set a4 [get_property [get_pin ff4/CK] arrival_max_rise]
+  set oracle [expr { $a4 - $a3 }]
+  lappend sweep $mine
+  if { abs($mine - $oracle) < 1e-4 } {
+    puts [format "  PASS ff4 at x=%d: skew %.4f ns == STA arrival difference %.4f ns" \
+      $x $mine $oracle]
+  } else {
+    puts [format "  FAIL ff4 at x=%d: skew %.4f ns != STA arrival difference %.4f ns" \
+      $x $mine $oracle]
+  }
+}
+
+lassign $sweep s1 s2 s3 s4
+if { $s1 < $s2 && $s2 < $s3 && $s3 < $s4 } {
+  puts [format "PASS skew tracks the injected asymmetry: %.4f < %.4f < %.4f < %.4f ns" \
+    $s1 $s2 $s3 $s4]
+} else {
+  puts [format "FAIL skew does not track the injected asymmetry: %.4f %.4f %.4f %.4f ns" \
+    $s1 $s2 $s3 $s4]
+}
+
+# Dynamic range: the far case must be several times the near one, so a
+# stuck-at-small-constant implementation cannot pass.
+if { $s4 > 4.0 * $s1 } {
+  puts [format "PASS skew dynamic range %.1fx across the sweep" \
+    [expr { $s4 / $s1 }]]
+} else {
+  puts [format "FAIL skew dynamic range only %.1fx across the sweep" \
+    [expr { $s4 / $s1 }]]
+}
