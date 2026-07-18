@@ -29,8 +29,15 @@ struct DensityTarget
   bool enabled = false;
   int window = 0;  // DBU
   int step = 0;    // DBU
-  double min_density = 0.0;
-  double max_density = 1.0;
+  // A NEGATIVE bound means "not supplied", the same convention the density
+  // engine uses.  Fill must never substitute a bound the caller did not give:
+  // inventing min = 0.0 makes every window look satisfied (fill silently does
+  // nothing), and inventing max = 1.0 removes the overshoot cap entirely.
+  double min_density = -1.0;
+  double max_density = -1.0;
+
+  bool hasMin() const { return min_density >= 0.0; }
+  bool hasMax() const { return max_density >= 0.0; }
 };
 
 // Extra keep-out held around coupling-sensitive nets while filling.  Fill

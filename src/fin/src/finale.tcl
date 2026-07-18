@@ -19,14 +19,17 @@ proc parse_area { area_arg } {
     [ord::microns_to_dbu $ux] [ord::microns_to_dbu $uy]]
 }
 
+# A negative bound means "not supplied" and is always legal; a supplied bound
+# must be a fraction in [0,1].  Both supplied means min <= max.
 proc check_density_range { min_density max_density } {
-  if { $min_density < 0.0 || $min_density > 1.0 } {
+  if { $min_density >= 0.0 && $min_density > 1.0 } {
     utl::error FIN 40 "min_density must be between 0.0 and 1.0."
   }
-  if { $max_density < 0.0 || $max_density > 1.0 } {
+  if { $max_density >= 0.0 && $max_density > 1.0 } {
     utl::error FIN 41 "max_density must be between 0.0 and 1.0."
   }
-  if { $min_density > $max_density } {
+  if { $min_density >= 0.0 && $max_density >= 0.0
+       && $min_density > $max_density } {
     utl::error FIN 42 "min_density must not exceed max_density."
   }
 }
@@ -61,9 +64,15 @@ proc density_fill { args } {
 
   # Density targets are optional; with none given the historical
   # fill-everything-available behavior is preserved exactly.
+  #
+  # A bound the user did NOT supply stays -1.0, meaning "no bound of this
+  # kind" -- the same convention the density engine uses.  Defaulting the
+  # missing side to 0.0/1.0 would INVENT a band the PDK never authorized:
+  # -max_density alone would silently fill nothing (nothing is ever below a
+  # min of 0.0), and -min_density alone would fill without any cap.
   set density_target 0
-  set min_density 0.0
-  set max_density 1.0
+  set min_density -1.0
+  set max_density -1.0
   set window 0
   set step 0
 

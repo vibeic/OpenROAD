@@ -79,6 +79,28 @@ check_metal_density_cmd(const odb::Rect& check_area,
   auto *finale = ord::OpenRoad::openRoad()->getFinale();
   auto *logger = ord::OpenRoad::openRoad()->getLogger();
 
+  // Window geometry is caller-supplied on BOTH commands, so a caller can drive
+  // fill over one window and then measure over another -- fill would consider
+  // the design done while signoff judges different geometry.  density_fill
+  // records what it used; if that disagrees with what is being checked now,
+  // say so loudly rather than let the two quietly diverge.
+  auto *block = ord::OpenRoad::openRoad()->getDb()->getChip()->getBlock();
+  auto *fill_w = odb::dbIntProperty::find(block, "fin_density_window");
+  auto *fill_s = odb::dbIntProperty::find(block, "fin_density_step");
+  if (fill_w != nullptr && fill_s != nullptr) {
+    const int used_step = step > 0 ? step : window;
+    if (fill_w->getValue() != window || fill_s->getValue() != used_step) {
+      const double dbu
+        = ord::OpenRoad::openRoad()->getDb()->getTech()->getDbUnitsPerMicron();
+      logger->warn(utl::FIN, 52,
+                   "Checking density over window/step {:.4f}/{:.4f} um but the "
+                   "last density_fill was driven over {:.4f}/{:.4f} um; fill "
+                   "satisfied different windows than this check measures.",
+                   window / dbu, used_step / dbu,
+                   fill_w->getValue() / dbu, fill_s->getValue() / dbu);
+    }
+  }
+
   fin::DensityLimits limits;
   limits.default_min = min_density;
   limits.default_max = max_density;

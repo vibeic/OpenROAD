@@ -13,10 +13,19 @@
 //
 //     density = filled_area / window_area                              (1)
 //
-// evaluated over a sliding window of the size and step the PDK specifies, and
-// compared against a per-layer [min, max] band.  A window below min is an
-// under-density (CMP dishing) violation; above max is an over-density
-// (planarity / etch loading) violation.
+// evaluated over a sliding window and compared against a per-layer [min, max]
+// band.  A window below min is an under-density (CMP dishing) violation; above
+// max is an over-density (planarity / etch loading) violation.
+//
+// WINDOW GEOMETRY IS CALLER-SUPPLIED, NOT PDK-DERIVED.  The window size and step
+// come from the caller (-window / -step); nothing reads them from the
+// technology, because ODB does not store the LEF density-window properties (the
+// LEF reader parses MINIMUMDENSITY / MAXIMUMDENSITY in lefiLayer but
+// dbTechLayer has no getter, so there is nothing to consult).  This matters for
+// anyone driving fill from this engine: fill and check MUST be given the SAME
+// window and step, or fill can satisfy a window that the check then measures
+// over different geometry.  Both the check report and the caller should state
+// the window/step they used so a mismatch is visible rather than silent.
 //
 // The density band is foundry data (it lives in the PDK, Y*): this engine
 // consumes it where a PDK or the user supplies it and can never manufacture a
