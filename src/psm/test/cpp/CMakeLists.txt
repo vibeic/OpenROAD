@@ -43,7 +43,27 @@ gtest_discover_tests(TestEMSignoff
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# The signal-net EM switching-current engine (signal_em.h) depends only on
+# em_signoff.h, so the closed-form correctness gate likewise links no
+# OpenDB/OpenSTA machinery.
+add_executable(TestSignalEM TestSignalEM.cpp)
+
+target_include_directories(TestSignalEM
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+)
+
+target_link_libraries(TestSignalEM
+  GTest::gtest
+  GTest::gtest_main
+)
+
+gtest_discover_tests(TestSignalEM
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 add_dependencies(build_and_test
   TestTransientRC
   TestEMSignoff
+  TestSignalEM
 )

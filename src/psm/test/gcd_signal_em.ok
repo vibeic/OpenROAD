@@ -1,0 +1,47 @@
+[INFO ODB-0227] LEF file: Nangate45/Nangate45.lef, created 22 layers, 27 vias, 135 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0130]     Created 54 pins.
+[INFO ODB-0131]     Created 1877 components and 4947 component-terminals.
+[INFO ODB-0132]     Created 2 special nets and 3754 connections.
+[INFO ODB-0133]     Created 439 nets and 1193 connections.
+########## Signal-net EM signoff ##########
+Corner              : default
+Supply swing        : 1.100 V
+Nets with routing   : 404
+Nets with drive     : 367
+Segments checked    : 4164
+With J-limit        : 4164
+No drive (skipped)  : 245
+No geometry (skipped): 0
+No J-limit (skipped): 0
+Worst J             : 2.708e-02 A/um^2 (rms on layer via2, net net21)
+Worst J-limit       : 1.000e+00 A/um^2
+Worst utilization   : 2.71 %
+Violations (avg)    : 0
+Violations (rms)    : 0
+Violations (peak)   : 0
+Violations          : 0
+Verdict             : PASS
+##########################################
+checked 4164 segments; worst rms-identity error 0.0004824506332740914
+########## Signal-net EM signoff ##########
+Corner              : default
+Supply swing        : 1.100 V
+Nets with routing   : 404
+Nets with drive     : 367
+Segments checked    : 4164
+With J-limit        : 4164
+No drive (skipped)  : 245
+No geometry (skipped): 0
+No J-limit (skipped): 0
+Worst J             : 2.708e-02 A/um^2 (rms on layer via2, net net21)
+Worst J-limit       : 1.354e-02 A/um^2
+Worst utilization   : 199.97 %
+Violations (avg)    : 0
+Violations (rms)    : 276
+Violations (peak)   : 0
+Violations          : 276
+Verdict             : FAIL
+##########################################
+[WARNING PSM-0129] Signal EM signoff FAILED: 276 segment(s) exceed a per-layer J-limit (worst 200.0% of the rms limit on via2, net net21).
+worst J_rms 2.708e-02 A/um^2; limit 0.01354 flags 276 of 4164 segments (recount agrees)

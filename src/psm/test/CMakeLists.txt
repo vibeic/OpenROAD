@@ -39,6 +39,7 @@ or_integration_tests(
     gcd_gt2n_backside_wo_pins
     gcd_gt2n_backside_wo_pins_straps
     gcd_em_density_vdd
+    gcd_signal_em
     gcd_no_vsrc
     gcd_no_vsrc_reuse
     gcd_sky130_vdd

@@ -41,6 +41,7 @@ cc_library(
         "include/psm/MakePDNSim.hh",
         "include/psm/em_signoff.h",
         "include/psm/pdnsim.h",
+        "include/psm/signal_em.h",
     ],
     includes = [
         "include",
