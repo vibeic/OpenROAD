@@ -58,5 +58,24 @@ puts "over_cap_selfcheck [check_metal_density -window 100 -step 100 \
 puts "--- post-fill at a FINER step 50: cap does NOT hold; expect 1 ---"
 puts "over_cap_finer [check_metal_density -window 100 -step 50 \
   -max_density 0.40]"
+
+# BOTH bounds are grid-relative, not just the cap. met1_band.txt bands met1
+# alone, so every other routing layer is NO_LIMIT and the counts below are
+# met1 windows and nothing else -- no inference from totals.
+#
+#   on the fill grid (100/100): 2 met1 windows, 0 violations   -> looks clean
+#   at an offset grid (100/50): 8 met1 windows, 6 violations   -> 5 UNDER, 1 OVER
+#
+# The under-density count is the larger one: filling a window to >= min does
+# not stop a window at another origin from being short, because nothing
+# controls where inside a window the metal lands. Both numbers are asserted as
+# the known-bad values, so making the budget offset-robust turns them green
+# unexpectedly and forces a deliberate update.
+puts "--- met1-only band on the FILL grid: expect 0 ---"
+puts "band_selfgrid [check_metal_density -window 100 -step 100 \
+  -limits_file met1_band.txt]"
+puts "--- met1-only band at an OFFSET grid: expect 6 (5 under + 1 over) ---"
+puts "band_offset [check_metal_density -window 100 -step 50 \
+  -limits_file met1_band.txt]"
 check_metal_density -window 100 -step 50 -min_density 0.10 -max_density 0.40 \
   -report_file [make_result_file density_window_postfill.rpt]

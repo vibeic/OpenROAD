@@ -109,10 +109,10 @@ The division of labour:
 | Answers | is this design within the band? | fill the short windows, without overshooting |
 | Needs a band? | yes, or it reports `NO_LIMIT` | only if you pass a density target |
 
-#### The cap is guaranteed on the window grid you filled with
+#### Both bounds are guaranteed only on the window grid you filled with
 
-`-max_density` is enforced against the windows the fill was driven over, and
-only those. A window that exists only at some *other* offset was never in the
+**Neither** `-min_density` nor `-max_density` is a whole-design guarantee. Both
+are enforced against the windows the fill was driven over, and only those. A window that exists only at some *other* offset was never in the
 budget, so it can exceed the cap. This is measurable on the fixture in
 `density_geometry_mismatch`: fill driven at window/step 100/100 measures a peak
 of **0.399998** and PASSES its 0.40 cap on that grid, and the very same design
@@ -120,6 +120,13 @@ measured at 100/50 — where a window straddles two separately-budgeted regions 
 peaks at **0.400200** and FAILS.
 
 That is not the budget misbehaving; it is what a per-window budget can promise.
+
+The minimum has the same defect, and on the fixture it is the larger one:
+banding met1 alone (so no other layer can contribute a count), the filled
+design shows **0 violations over its own 2 windows** and **6 violations over 8
+windows at a 50um offset — 5 under-density and 1 over**. Filling a window to at
+least `min` does not stop a window at another origin from being short, because
+nothing controls where inside a window the metal lands.
 
 It has a sharper consequence for how you sign off. `DensityBudget` rejects any
 shape that would push a budgeted window past the cap, so after the fill every
@@ -132,9 +139,12 @@ that case.
 The practical rules:
 
 - **Sign off at a step finer than you filled with.** Only a finer or offset grid
-  reaches the windows that straddle two separately-budgeted regions — the ones
-  that can actually be over the cap. A check on the fill's own grid returns 0
-  by construction and is not evidence of anything.
+  reaches the windows that straddle two separately-filled regions. A check on
+  the fill's own grid is not evidence of anything: for the cap it returns 0 by
+  construction, and for the minimum it returns 0 because those are exactly the
+  windows the fill topped up.
+- **A foundry deck picks its own window origin.** Grid-relative compliance is
+  therefore not signoff compliance, in either direction.
 - If you must sign off at step S, drive fill at a step no coarser than S.
 
 Divergent geometry is therefore the *useful* case, not the error case, which is
