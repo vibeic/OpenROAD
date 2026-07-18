@@ -79,6 +79,22 @@ class IRSolver
     double current_duty = 1.0;  // triangular current-pulse duty in (0,1]
     bool phase_spread = false;  // false: worst-case simultaneous switching
     std::string current_profile;  // optional global current-vs-time waveform
+    // Vectored (per-instance) refinement.  A file of
+    //   <instance_name> <activity_scale> <phase_center> [duty]
+    // rows, derived from a VCD/SAIF, giving each instance its own switching
+    // phase (and optional activity weight / duty) so switching is no longer
+    // assumed simultaneous.  Empty => vectorless worst case (the safe default).
+    std::string vectored_profile;
+    // When true, per-instance activity_scale weights are renormalized so the
+    // total average current is preserved (vectoring redistributes WHERE current
+    // peaks in time, it does not inflate total power).
+    bool normalize_vectored = true;
+    // Lumped package/board parasitics in series with the ideal supply.  Their
+    // job is the di/dt inductive-droop ("first droop") term the resistive PDN
+    // cannot produce: the whole-die supply rail droops by
+    //   package_r * I_total(t) + package_l * dI_total/dt.
+    double package_r = 0.0;  // package/board series resistance [ohm]
+    double package_l = 0.0;  // package/board series inductance [H]
   };
 
   // Results of a transient analysis, alongside the static reference so callers
@@ -97,6 +113,10 @@ class IRSolver
     double timestep = 0.0;           // [s]
     int total_steps = 0;
     bool quasi_static = false;  // true when no capacitance was supplied
+    bool vectored = false;      // true when a per-instance profile was applied
+    int vectored_insts = 0;     // number of instances matched by the profile
+    // Worst instantaneous package/board droop package_r*I + package_l*dI/dt [V].
+    double package_droop = 0.0;
   };
 
   using UserVoltages = odb::PtrMap<odb::dbNet, std::map<sta::Scene*, Voltage>>;
@@ -251,7 +271,11 @@ class IRSolver
       Eigen::VectorXd& j_vector,
       std::map<Node*, std::size_t>& real_node_index,
       Voltage& src_voltage,
-      Power& total_power);
+      Power& total_power,
+      // Optional: receives the matrix-row indices of the ideal-source pins (the
+      // rail rows).  Used by the transient path to modulate the rail voltage
+      // for the package/board di/dt droop.
+      std::set<std::size_t>* source_indices = nullptr);
 
   // Builds the per-node capacitance-to-ground vector for a transient solve,
   // indexed to match node_index.  Returns the total capacitance applied.

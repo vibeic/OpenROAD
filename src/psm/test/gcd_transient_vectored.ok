@@ -26,9 +26,10 @@ Timestep               : 2.00e-11 s
 Steps                  : 100
 On-die capacitance     : 3.10e-15 F
 Worst static IR drop   : 5.04e-04 V
-Worst dynamic IR drop  : 1.01e-03 V
-Dynamic/static ratio   : 2.00
-Current model          : vectorless (simultaneous worst case)
+Worst dynamic IR drop  : 1.08e-03 V
+Dynamic/static ratio   : 2.15
+Current model          : vectored (5 instances matched)
+Package L*di/dt droop  : 7.77e-05 V
 Worst droop time       : 1.00e-09 s (step 50)
 ###################################################
 No differences found.

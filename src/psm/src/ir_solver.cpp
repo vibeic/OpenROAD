@@ -1006,7 +1006,8 @@ bool IRSolver::assembleSystem(
     Eigen::VectorXd& j_vector,
     std::map<Node*, std::size_t>& real_node_index,
     Voltage& src_voltage,
-    Power& total_power)
+    Power& total_power,
+    std::set<std::size_t>* source_indices)
 {
   if (network_->isFloorplanningOnly()) {
     network_->setFloorplanning(false);
@@ -1124,6 +1125,15 @@ bool IRSolver::assembleSystem(
                              j_vector);
   addSourcesToMatrixAndVoltages(
       src_voltage, src_nodes, node_index, g_matrix, j_vector);
+
+  // Report the ideal-source pin rows (the rail rows) so the transient path can
+  // modulate them for the package/board droop.
+  if (source_indices != nullptr) {
+    source_indices->clear();
+    for (const auto& src_node : src_nodes) {
+      source_indices->insert(node_index.at(src_node.get()));
+    }
+  }
 
   return true;
 }
@@ -1272,6 +1282,7 @@ void IRSolver::solveTransient(sta::Scene* corner,
   std::map<Node*, std::size_t> real_node_index;
   Voltage src_voltage = 0.0;
   Power total_power = 0.0;
+  std::set<std::size_t> source_indices;
 
   if (!assembleSystem(corner,
                       source_type,
@@ -1280,7 +1291,8 @@ void IRSolver::solveTransient(sta::Scene* corner,
                       j_vector,
                       real_node_index,
                       src_voltage,
-                      total_power)) {
+                      total_power,
+                      &source_indices)) {
     return;
   }
 
@@ -1380,11 +1392,64 @@ void IRSolver::solveTransient(sta::Scene* corner,
     return prof_s[i - 1] + f * (prof_s[i] - prof_s[i - 1]);
   };
 
+  // Optional Stage-3 VECTORED refinement: a per-instance profile derived from a
+  // VCD/SAIF.  Each line "<instance> <activity_scale> <phase_center> [duty]"
+  // gives that instance its own switching phase (so switching is no longer
+  // assumed simultaneous), an optional activity weight, and an optional duty.
+  struct VecProfile
+  {
+    double scale = 1.0;
+    double center = 0.5;
+    double duty = -1.0;  // <0 => use the global -current_duty
+  };
+  std::map<std::string, VecProfile> inst_profiles;
+  const bool use_vectored = !settings.vectored_profile.empty();
+  if (use_vectored) {
+    std::ifstream vf(settings.vectored_profile);
+    if (!vf) {
+      logger_->error(utl::PSM,
+                     110,
+                     "Unable to open vectored profile file {}.",
+                     settings.vectored_profile);
+    }
+    std::string line;
+    while (std::getline(vf, line)) {
+      if (line.empty() || line[0] == '#') {
+        continue;
+      }
+      std::istringstream ss(line);
+      std::string inst;
+      VecProfile vp;
+      if (ss >> inst >> vp.scale >> vp.center) {
+        double d = 0.0;
+        if (ss >> d) {
+          vp.duty = d;
+        }
+        inst_profiles[inst] = vp;
+      }
+    }
+  }
+
+  // Map each grid node to its instance's profile (if any) via the ITerm->inst
+  // ownership.  Only instances named in the file get a non-default profile.
+  std::map<Node*, const VecProfile*> node_profile;
+  if (use_vectored) {
+    for (const auto& [inst, nodes] : network_->getInstanceNodeMapping()) {
+      auto pit = inst_profiles.find(inst->getName());
+      if (pit == inst_profiles.end()) {
+        continue;
+      }
+      for (auto* node : nodes) {
+        node_profile[node] = &pit->second;
+      }
+    }
+  }
+
   // Time-varying current model.  Each sink's average current I_avg (already in
   // j_vector via the static assembly, with the supply-net sign) is reshaped
   // into a per-clock pulse.  We rewrite only the sink rows; source-injection
-  // rows keep their constant DC bias.  sign = +1 for ground, -1 for supply,
-  // matching buildCondMatrixAndVoltages.
+  // rows keep their constant DC bias (unless the package model modulates them).
+  // sign = +1 for ground, -1 for supply, matching buildCondMatrixAndVoltages.
   const double sign = is_ground ? 1.0 : -1.0;
 
   struct Sink
@@ -1392,19 +1457,51 @@ void IRSolver::solveTransient(sta::Scene* corner,
     std::size_t idx;
     double i_avg;
     double center;  // normalized switching phase within the clock period
+    double duty;    // per-instance duty (falls back to the global duty)
+    double scale;   // per-instance activity weight (normalized below)
   };
   std::vector<Sink> sinks;
   sinks.reserve(currents.size());
+  int matched_insts = 0;
   for (const auto& [node, idx] : real_node_index) {
     auto cit = currents.find(node);
     if (cit == currents.end() || cit->second == 0.0) {
       continue;
     }
     double center = 0.5;  // worst case: all sinks switch together
-    if (settings.phase_spread && num_nodes > 0) {
+    double sink_duty = duty;
+    double scale = 1.0;
+    auto npit = node_profile.find(node);
+    if (npit != node_profile.end()) {
+      const VecProfile* vp = npit->second;
+      center = vp->center;
+      scale = vp->scale;
+      if (vp->duty > 0.0 && vp->duty <= 1.0) {
+        sink_duty = vp->duty;
+      }
+      matched_insts++;
+    } else if (settings.phase_spread && num_nodes > 0) {
       center = static_cast<double>(idx) / static_cast<double>(num_nodes);
     }
-    sinks.push_back({idx, cit->second, center});
+    sinks.push_back({idx, cit->second, center, sink_duty, scale});
+  }
+
+  // Renormalize the vectored activity weights so the current-weighted mean scale
+  // is 1: vectoring redistributes WHERE current peaks in time, it must not
+  // inflate or deflate the total average current (charge conservation).
+  if (use_vectored && settings.normalize_vectored) {
+    double num = 0.0;
+    double den = 0.0;
+    for (const auto& s : sinks) {
+      num += s.i_avg * s.scale;
+      den += s.i_avg;
+    }
+    const double mean_scale = (den > 0.0) ? num / den : 1.0;
+    if (mean_scale > 0.0) {
+      for (auto& s : sinks) {
+        s.scale /= mean_scale;
+      }
+    }
   }
 
   const int steps_per_period = settings.steps;
@@ -1412,15 +1509,44 @@ void IRSolver::solveTransient(sta::Scene* corner,
   const int nsteps = steps_per_period * periods;
   const double dt = settings.period / steps_per_period;
 
+  // Package/board lumped parasitics: the whole-die rail droops by
+  // R_pkg*I_total(t) + L_pkg*dI_total/dt, where I_total is the magnitude of the
+  // aggregate switching current.  For a single lumped series impedance this is
+  // exact (the source branch current identically equals the total sink current)
+  // and is validated against the matrix-inductor companion model by the
+  // PackageAggregateMatchesMatrixInductor gtest.
+  const bool use_package = (settings.package_r > 0.0 || settings.package_l > 0.0);
+  auto total_current = [&](double t) -> double {
+    const double phase = t / settings.period;
+    double sum = 0.0;
+    for (const auto& s : sinks) {
+      const double shape = use_profile
+                               ? profile_shape(phase)
+                               : triangularPulseShape(phase, s.center, s.duty);
+      sum += s.i_avg * s.scale * shape;
+    }
+    return sum;  // magnitude of the current drawn from the supply
+  };
+
   const Eigen::VectorXd j_base = j_vector;
   auto rhs_fn = [&](int /*k*/, double t) -> Eigen::VectorXd {
     Eigen::VectorXd rhs = j_base;
     const double phase = t / settings.period;  // clock periods elapsed
     for (const auto& s : sinks) {
-      const double shape = use_profile ? profile_shape(phase)
-                                       : triangularPulseShape(
-                                             phase, s.center, duty);
-      rhs[s.idx] = sign * s.i_avg * shape;
+      const double shape = use_profile
+                               ? profile_shape(phase)
+                               : triangularPulseShape(phase, s.center, s.duty);
+      rhs[s.idx] = sign * s.i_avg * s.scale * shape;
+    }
+    if (use_package) {
+      const double i_now = total_current(t);
+      const double i_prev = total_current(t - dt);
+      const double didt = (i_now - i_prev) / dt;
+      const double droop = settings.package_r * i_now + settings.package_l * didt;
+      // Supply rail droops (v decreases); ground rail bounces up.
+      for (const std::size_t sidx : source_indices) {
+        rhs[sidx] = is_ground ? (src_voltage + droop) : (src_voltage - droop);
+      }
     }
     return rhs;
   };
@@ -1436,6 +1562,19 @@ void IRSolver::solveTransient(sta::Scene* corner,
                            /*track_min=*/!is_ground);
   } catch (const std::exception& e) {
     logger_->error(utl::PSM, 103, "Transient solve failed: {}.", e.what());
+  }
+
+  // Worst instantaneous package droop over the window (for reporting).
+  double worst_package_droop = 0.0;
+  if (use_package) {
+    for (int k = 1; k <= nsteps; ++k) {
+      const double t = k * dt;
+      const double i_now = total_current(t);
+      const double didt = (i_now - total_current(t - dt)) / dt;
+      const double droop
+          = settings.package_r * i_now + settings.package_l * didt;
+      worst_package_droop = std::max(worst_package_droop, droop);
+    }
   }
 
   // Extract the per-node worst voltage envelope and the global worst droop.
@@ -1470,6 +1609,9 @@ void IRSolver::solveTransient(sta::Scene* corner,
   res.timestep = dt;
   res.total_steps = nsteps;
   res.quasi_static = quasi_static;
+  res.vectored = use_vectored;
+  res.vectored_insts = matched_insts;
+  res.package_droop = worst_package_droop;
   transient_results_[corner] = res;
 }
 
@@ -1825,6 +1967,16 @@ void IRSolver::reportTransient(sta::Scene* corner) const
   logger_->report("Worst dynamic IR drop  : {:3.2e} V",
                   r.worst_dynamic_ir_drop);
   logger_->report("Dynamic/static ratio   : {:3.2f}", r.dynamic_static_ratio);
+  if (r.vectored) {
+    logger_->report("Current model          : vectored ({} instances matched)",
+                    r.vectored_insts);
+  } else {
+    logger_->report(
+        "Current model          : vectorless (simultaneous worst case)");
+  }
+  if (r.package_droop > 0.0) {
+    logger_->report("Package L*di/dt droop  : {:3.2e} V", r.package_droop);
+  }
   logger_->report("Worst droop time       : {:3.2e} s (step {})",
                   r.worst_time,
                   r.worst_step);

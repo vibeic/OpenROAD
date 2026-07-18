@@ -128,7 +128,10 @@ void PDNSim::analyzePowerGridDynamic(odb::dbNet* net,
                                      double decap_cap,
                                      double current_duty,
                                      bool phase_spread,
-                                     const std::string& current_profile)
+                                     const std::string& current_profile,
+                                     const std::string& vectored_profile,
+                                     double package_r,
+                                     double package_l)
 {
   if (!checkConnectivity(net, false, error_file, false)) {
     return;
@@ -147,6 +150,9 @@ void PDNSim::analyzePowerGridDynamic(odb::dbNet* net,
   settings.current_duty = current_duty;
   settings.phase_spread = phase_spread;
   settings.current_profile = current_profile;
+  settings.vectored_profile = vectored_profile;
+  settings.package_r = package_r;
+  settings.package_l = package_l;
 
   auto* solver = getIRSolver(net, false);
   solver->solveTransient(corner, source_type, voltage_source_file, settings);

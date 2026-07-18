@@ -62,10 +62,10 @@ analyze_power_grid_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceType 
 }
 
 void
-analyze_power_grid_dynamic_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceType type, const char* error_file, const char* voltage_file, const char* voltage_source_file, double period, int steps, int num_periods, double node_cap, double total_cap, double decap_cap, double current_duty, bool phase_spread, const char* current_profile)
+analyze_power_grid_dynamic_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceType type, const char* error_file, const char* voltage_file, const char* voltage_source_file, double period, int steps, int num_periods, double node_cap, double total_cap, double decap_cap, double current_duty, bool phase_spread, const char* current_profile, const char* vectored_profile, double package_r, double package_l)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->analyzePowerGridDynamic(net, corner, type, voltage_file, error_file, voltage_source_file, period, steps, num_periods, node_cap, total_cap, decap_cap, current_duty, phase_spread, current_profile);
+  pdnsim->analyzePowerGridDynamic(net, corner, type, voltage_file, error_file, voltage_source_file, period, steps, num_periods, node_cap, total_cap, decap_cap, current_duty, phase_spread, current_profile, vectored_profile, package_r, package_l);
 }
 
 void

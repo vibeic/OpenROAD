@@ -105,7 +105,10 @@ class PDNSim : public odb::dbBlockCallBackObj
                                double decap_cap,
                                double current_duty,
                                bool phase_spread,
-                               const std::string& current_profile);
+                               const std::string& current_profile,
+                               const std::string& vectored_profile,
+                               double package_r,
+                               double package_l);
   void writeSpiceNetwork(odb::dbNet* net,
                          sta::Scene* corner,
                          GeneratedSourceType source_type,

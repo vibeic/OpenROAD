@@ -29,6 +29,7 @@ or_integration_tests(
     gcd_test_assign_power
     gcd_test_vdd
     gcd_transient_vdd
+    gcd_transient_vectored
     gcd_vss_no_vsrc
     gcd_write_sp_test_vdd
     insert_decap1
