@@ -815,9 +815,19 @@ void DensityFill::fill(const char* cfg_filename,
     if (auto* prop = odb::dbIntProperty::find(block, "fin_density_step")) {
       odb::dbProperty::destroy(prop);
     }
+    if (auto* prop = odb::dbIntProperty::find(block, "fin_density_max_ppm")) {
+      odb::dbProperty::destroy(prop);
+    }
     odb::dbIntProperty::create(block, "fin_density_window", target.window);
     odb::dbIntProperty::create(
         block, "fin_density_step", target.step > 0 ? target.step : target.window);
+    // Whether a cap was ENFORCED on this grid, in parts per million so it fits
+    // an int property; -1 when no max was supplied.  check_metal_density needs
+    // this to tell an independent measurement from a self-confirming one.
+    odb::dbIntProperty::create(
+        block,
+        "fin_density_max_ppm",
+        target.hasMax() ? static_cast<int>(target.max_density * 1e6) : -1);
   }
 
   for (dbTechLayer* layer : tech->getLayers()) {

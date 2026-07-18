@@ -120,10 +120,25 @@ measured at 100/50 — where a window straddles two separately-budgeted regions 
 peaks at **0.400200** and FAILS.
 
 That is not the budget misbehaving; it is what a per-window budget can promise.
-The practical rule: **if you intend to sign off at step S, drive fill at a step
-no coarser than S.** `check_metal_density` warns (FIN-0052) whenever it is run
-over different geometry than the last `density_fill` used, so the mismatch
-surfaces instead of shipping as a surprise FAIL.
+
+It has a sharper consequence for how you sign off. `DensityBudget` rejects any
+shape that would push a budgeted window past the cap, so after the fill every
+budgeted window is within the cap **by construction**. Re-checking those same
+windows against that same cap therefore *cannot* fail — it reads the constraint
+back rather than testing it. **A check on the grid the fill used is not an
+independent signoff.** `check_metal_density` says so (FIN-0053) when it detects
+that case.
+
+The practical rules:
+
+- **Sign off at a step finer than you filled with.** Only a finer or offset grid
+  reaches the windows that straddle two separately-budgeted regions — the ones
+  that can actually be over the cap.
+- If you must sign off at step S, drive fill at a step no coarser than S.
+
+Divergent geometry is therefore the *useful* case, not the error case, which is
+why FIN-0052 is a warning and not a hard failure: making divergence an error
+would push callers toward the same-grid check, i.e. toward the tautological one.
 
 Note this is the DEF-stage pair. It is complementary to, not a replacement for,
 a post-streamout GDS density pass: fill inserted here is visible to routing and

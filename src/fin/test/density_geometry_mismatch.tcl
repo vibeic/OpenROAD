@@ -23,8 +23,11 @@ read_def density_window.def
 density_fill -rules fill_met1.json -min_density 0.30 -max_density 0.40 \
   -density_window 100 -density_step 100
 
-# Same geometry: no warning expected.
-puts "--- check at the SAME 100/100 geometry: expect NO FIN-0052 ---"
+# Same geometry: no FIN-0052 (nothing diverged) but FIN-0053 MUST fire, because
+# this check re-reads the very constraint the budget enforced and so cannot
+# fail. A silent PASS here would be the most reassuring useless result in the
+# whole flow.
+puts "--- check at the SAME 100/100 geometry: expect FIN-0053, not FIN-0052 ---"
 check_metal_density -window 100 -step 100 -max_density 0.40
 
 # Different window: FIN-0052 must fire.
