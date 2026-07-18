@@ -928,10 +928,63 @@ void io::Parser::checkPins()
   }
 }
 
+std::pair<std::string, std::string> io::firstUnconnectedRoutingPair(
+    const std::vector<RoutingLayerView>& layers)
+{
+  // Walk the ordered stack; between two consecutive routing layers there must
+  // be at least one cut layer that owns a default via.
+  int prev_routing = -1;
+  bool via_since_prev = false;
+  for (int i = 0; i < static_cast<int>(layers.size()); ++i) {
+    const RoutingLayerView& l = layers[i];
+    if (l.is_cut && l.has_default_via) {
+      via_since_prev = true;
+    }
+    if (l.is_routing) {
+      if (prev_routing >= 0 && !via_since_prev) {
+        return {layers[prev_routing].name, l.name};
+      }
+      prev_routing = i;
+      via_since_prev = false;
+    }
+  }
+  return {"", ""};
+}
+
+void io::Parser::checkRoutingLayerViaConnectivity()
+{
+  std::vector<RoutingLayerView> view;
+  for (auto lnum = router_cfg_->BOTTOM_ROUTING_LAYER;
+       lnum <= router_cfg_->TOP_ROUTING_LAYER
+       && lnum <= getTech()->getTopLayerNum();
+       ++lnum) {
+    auto layer = getTech()->getLayer(lnum);
+    RoutingLayerView v;
+    v.name = layer->getName();
+    v.is_routing = (layer->getType() == dbTechLayerType::ROUTING);
+    v.is_cut = (layer->getType() == dbTechLayerType::CUT);
+    v.has_default_via = v.is_cut && (layer->getDefaultViaDef() != nullptr);
+    view.push_back(v);
+  }
+  const auto gap = firstUnconnectedRoutingPair(view);
+  if (!gap.first.empty()) {
+    logger_->error(
+        DRT,
+        353,
+        "No via connects routing layers {} and {}. The technology is missing "
+        "the cut-layer via/VIARULE definitions required for detailed routing; "
+        "provide a PDK tech LEF with vias spanning this routing range instead "
+        "of leaving nets unrouted.",
+        gap.first,
+        gap.second);
+  }
+}
+
 void io::Parser::postProcess()
 {
   checkPins();
   initDefaultVias();
+  checkRoutingLayerViaConnectivity();
   if (router_cfg_->DBPROCESSNODE == "GF14_13M_3Mx_2Cx_4Kx_2Hx_2Gx_LB") {
     initDefaultVias_GF14(router_cfg_->DBPROCESSNODE);
   }

@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "boost/icl/interval_set.hpp"
@@ -130,6 +131,10 @@ class Parser
                 bool& foundCenterTracks,
                 bool& hasPolys);
   void checkPins();
+  // Verifies every adjacent routing-layer pair in the router's range is
+  // connected by a cut layer that owns a default via; a gap means the router
+  // cannot create inter-layer geometry and would silently emit a via-less DEF.
+  void checkRoutingLayerViaConnectivity();
   void getViaRawPriority(const frViaDef* viaDef, viaRawPriorityTuple& priority);
   void initDefaultVias_GF14(const std::string& node);
   void initCutLayerWidth();
@@ -241,4 +246,36 @@ class TopLayerBTermHandler
   utl::Logger* logger_;
   RouterConfiguration* router_cfg_;
 };
+
+// Decides whether a bterm carrying more than one pin can be merged into a
+// single router terminal instead of aborting with DRT-0302.
+//
+// TritonRoute merges the multiple pin shapes of a power/ground bterm into one
+// router pin (they are electrically one node, already tied by the PDN).  The
+// same is true of a supply/special NET whose landing pads were exposed as a
+// (possibly signal-typed) bterm when a hierarchical macro is FLATTENED before
+// routing -- commercial routers merge those same-PG-net bterms.  A genuine
+// multi-pin SIGNAL bterm on an ordinary net is NOT merged (its separate pins
+// may be must-connect), so it still raises DRT-0302.
+//
+// Returns true if a bterm with >1 pins is safe to merge (no DRT-0302).
+bool multiPinBTermSupported(odb::dbBTerm* term);
+
+// A minimal, bottom-to-top ordered view of the tech layers inside the router's
+// configured routing range, for via-connectivity validation.
+struct RoutingLayerView
+{
+  std::string name;
+  bool is_routing = false;
+  bool is_cut = false;
+  bool has_default_via = false;  // meaningful only for cut layers
+};
+
+// Returns the {lower, upper} names of the first adjacent routing-layer pair
+// that is NOT bridged by a cut layer owning a default via (i.e. the router has
+// no way to place a via between them), or {"", ""} when every pair is
+// connected.  Pure decision function so it can be unit-tested without a tech.
+std::pair<std::string, std::string> firstUnconnectedRoutingPair(
+    const std::vector<RoutingLayerView>& layers);
+
 }  // namespace drt::io

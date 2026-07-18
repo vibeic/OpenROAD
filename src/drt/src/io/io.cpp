@@ -1136,27 +1136,33 @@ static bool updatefrAccessPoint(odb::dbAccessPoint* db_ap,
   return true;
 }
 
+bool io::multiPinBTermSupported(odb::dbBTerm* term)
+{
+  if (term->getBPins().size() <= 1) {
+    return true;
+  }
+  // Power/ground bterms merge their pins (already tied by the PDN).
+  if (term->getSigType().isSupply()) {
+    return true;
+  }
+  // A supply/special NET whose landing pads were flattened out as a
+  // (possibly signal-typed) bterm merges the same way commercial routers do.
+  odb::dbNet* net = term->getNet();
+  if (net != nullptr && (net->getSigType().isSupply() || net->isSpecial())) {
+    return true;
+  }
+  // A genuine multi-pin signal bterm on an ordinary net is not mergeable.
+  return false;
+}
+
 void io::Parser::setBTerms(odb::dbBlock* block)
 {
   for (auto term : block->getBTerms()) {
-    switch (term->getSigType().getValue()) {
-      case odb::dbSigType::POWER:
-      case odb::dbSigType::GROUND:
-        // We allow for multiple pins
-        break;
-      case odb::dbSigType::TIEOFF:
-      case odb::dbSigType::SIGNAL:
-      case odb::dbSigType::CLOCK:
-      case odb::dbSigType::ANALOG:
-      case odb::dbSigType::RESET:
-      case odb::dbSigType::SCAN:
-        if (term->getBPins().size() > 1) {
-          logger_->error(utl::DRT,
-                         302,
-                         "Unsupported multiple pins on bterm {}",
-                         term->getName());
-        }
-        break;
+    if (!multiPinBTermSupported(term)) {
+      logger_->error(utl::DRT,
+                     302,
+                     "Unsupported multiple pins on bterm {}",
+                     term->getName());
     }
     auto uTermIn = std::make_unique<frBTerm>(term->getName());
     auto termIn = uTermIn.get();
