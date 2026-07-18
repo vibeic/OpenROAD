@@ -127,6 +127,13 @@ analyze_power_grid_cmd(const char* net_name,
 }
 
 void
+analyze_power_grid_dynamic_cmd(const char* net_name, Scene* corner, psm::GeneratedSourceType type, const char* error_file, const char* voltage_file, const char* voltage_source_file, double period, int steps, int num_periods, double node_cap, double total_cap, double decap_cap, double current_duty, bool phase_spread, const char* current_profile)
+{
+  PDNSim* pdnsim = getPDNSim();
+  pdnsim->analyzePowerGridDynamic(resolvePowerGridNet(net_name), corner, type, voltage_file, error_file, voltage_source_file, period, steps, num_periods, node_cap, total_cap, decap_cap, current_duty, phase_spread, current_profile);
+}
+
+void
 add_decap_master(odb::dbMaster *master, float cap)
 {
   PDNSim* pdnsim = getPDNSim();

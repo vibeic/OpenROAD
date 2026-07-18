@@ -33,6 +33,7 @@ cc_library(
         "src/pdnsim.cpp",
         "src/shape.cpp",
         "src/shape.h",
+        "src/transient.h",
         ":swig",
         ":tcl",
     ],
