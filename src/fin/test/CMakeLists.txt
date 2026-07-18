@@ -7,6 +7,8 @@ or_integration_tests(
     density_window_uncapped
     coupling_fill
     coupling_fill_off
+    density_failsafe
+    density_geometry_mismatch
 )
 
 add_subdirectory(cpp)

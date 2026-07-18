@@ -75,6 +75,7 @@ Verdict             : FAIL
 [WARNING FIN-0022] Metal density check FAILED: 1 window(s) outside the per-layer density band (0 under, 1 over).
 max_over 1
 --- density-driven fill, cap 0.40 ---
+[INFO FIN-0051] Density-driven fill window / step: 100.0000 / 100.0000 um.
 ########## Metal density check ##########
 Window / step       : 100.0000 / 100.0000 um
 Windows measured    : 12
