@@ -604,6 +604,79 @@ proc report_cts { args } {
   cts::report_cts_metrics
 }
 
+sta::define_cmd_args "report_cts_skew" {[-verbose]}
+proc report_cts_skew { args } {
+  sta::parse_key_args "report_cts_skew" args \
+    keys {} flags {-verbose}
+
+  sta::check_argc_eq0 "report_cts_skew" $args
+
+  if { [ord::get_db_block] == "NULL" } {
+    utl::error CTS 246 "No design block found."
+  }
+
+  cts::report_cts_skew [info exists flags(-verbose)]
+}
+
+sta::define_cmd_args "report_cts_crpr" {[-verbose]}
+proc report_cts_crpr { args } {
+  sta::parse_key_args "report_cts_crpr" args \
+    keys {} flags {-verbose}
+
+  sta::check_argc_eq0 "report_cts_crpr" $args
+
+  if { [ord::get_db_block] == "NULL" } {
+    utl::error CTS 247 "No design block found."
+  }
+
+  cts::report_cts_crpr [info exists flags(-verbose)]
+}
+
+sta::define_cmd_args "cts_crpr_credit" {sink_pin1 sink_pin2 [-scene scene]}
+proc cts_crpr_credit { args } {
+  sta::parse_key_args "cts_crpr_credit" args \
+    keys {-scene} flags {}
+
+  sta::check_argc_eq2 "cts_crpr_credit" $args
+
+  set scene ""
+  if { [info exists keys(-scene)] } {
+    set scene $keys(-scene)
+  }
+
+  cts::cts_crpr_credit [lindex $args 0] [lindex $args 1] $scene
+}
+
+sta::define_cmd_args "cts_clock_skew" {clock_net [-scene scene]}
+proc cts_clock_skew { args } {
+  sta::parse_key_args "cts_clock_skew" args \
+    keys {-scene} flags {}
+
+  sta::check_argc_eq1 "cts_clock_skew" $args
+
+  set scene ""
+  if { [info exists keys(-scene)] } {
+    set scene $keys(-scene)
+  }
+
+  cts::cts_clock_skew [lindex $args 0] $scene
+}
+
+sta::define_cmd_args "cts_clock_insertion_delay" {clock_net [-scene scene]}
+proc cts_clock_insertion_delay { args } {
+  sta::parse_key_args "cts_clock_insertion_delay" args \
+    keys {-scene} flags {}
+
+  sta::check_argc_eq1 "cts_clock_insertion_delay" $args
+
+  set scene ""
+  if { [info exists keys(-scene)] } {
+    set scene $keys(-scene)
+  }
+
+  cts::cts_clock_insertion_delay [lindex $args 0] $scene
+}
+
 namespace eval cts {
 proc clock_tree_synthesis_debug { args } {
   sta::parse_key_args "clock_tree_synthesis_debug" args \

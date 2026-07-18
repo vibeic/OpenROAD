@@ -129,6 +129,64 @@ report_cts
 | ----- | ----- |
 | `-out_file` | The file to save `cts` reports. If this parameter is omitted, the report is streamed to `stdout` and not saved. |
 
+### Report CTS Skew
+
+Reports the clock insertion delay and skew of each clock tree, separately for
+every timing scene. A tree balanced at the typical corner is not necessarily
+balanced at the fast or slow one, so the numbers are reported per scene rather
+than collapsed into one.
+
+```tcl
+report_cts_skew
+    [-verbose]
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `-verbose` | Also report the arrival at every individual sink. |
+
+The same numbers are available as Tcl values:
+
+```tcl
+cts_clock_skew clock_net
+    [-scene scene]
+```
+
+Returns the skew of the named clock root net, in seconds, at the given scene
+(the command scene if omitted).
+
+### Report CTS CRPR
+
+Reports the common-path pessimism credit that the clock tree topology earns.
+For a pair of sinks the credit is the arrival at the output pin of their
+lowest common ancestor: the part of the clock path both sinks physically
+travel, which therefore cannot contribute skew between them and should not be
+charged as pessimism.
+
+```tcl
+report_cts_crpr
+    [-verbose]
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `-verbose` | Also report every sink pair with the shared node it was credited against. |
+
+The credit for one pair is available as a Tcl value:
+
+```tcl
+cts_crpr_credit sink_pin1 sink_pin2
+    [-scene scene]
+```
+
+Returns the credit in seconds. It is an error if the two pins are not both
+sinks of the same clock tree; a zero-length common path and "these pins are
+unrelated" are different answers and are not conflated.
+
 ### Set CTS configuration
 
 This command is used to set the configuration of CTS.
