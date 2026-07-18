@@ -53,13 +53,17 @@ sta::define_cmd_args "analyze_power_grid" {
   [-current_duty duty]
   [-spread_phases]
   [-current_profile file]
+  [-vectored_profile file]
+  [-package_r resistance]
+  [-package_l inductance]
 }
 
 proc analyze_power_grid { args } {
   sta::parse_key_args "analyze_power_grid" args \
     keys {-net -corner -voltage_file -error_file -em_outfile -vsrc \
       -source_type -period -steps -num_periods -node_cap -total_cap \
-      -decap_cap -current_duty -current_profile} \
+      -decap_cap -current_duty -current_profile -vectored_profile \
+      -package_r -package_l} \
     flags {-enable_em -allow_reuse -transient -spread_phases}
   if { ![info exists keys(-net)] } {
     utl::error PSM 58 "Argument -net not specified."
@@ -127,6 +131,18 @@ proc analyze_power_grid { args } {
     if { [info exists keys(-current_profile)] } {
       set current_profile $keys(-current_profile)
     }
+    set vectored_profile ""
+    if { [info exists keys(-vectored_profile)] } {
+      set vectored_profile $keys(-vectored_profile)
+    }
+    set package_r 0.0
+    if { [info exists keys(-package_r)] } {
+      set package_r $keys(-package_r)
+    }
+    set package_l 0.0
+    if { [info exists keys(-package_l)] } {
+      set package_l $keys(-package_l)
+    }
 
     if { $is_3d } {
       utl::error PSM 158 "-transient is not supported for a 3D assembly."
@@ -146,7 +162,10 @@ proc analyze_power_grid { args } {
       $decap_cap \
       $current_duty \
       $phase_spread \
-      $current_profile
+      $current_profile \
+      $vectored_profile \
+      $package_r \
+      $package_l
     return
   }
 

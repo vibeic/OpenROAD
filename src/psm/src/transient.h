@@ -32,13 +32,37 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <functional>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 #include "Eigen/Sparse"
 
 namespace psm {
+
+// A lumped series inductor branch between two nodes (p, q), used to model the
+// package / board parasitic inductance that carries the supply current on its
+// way to the die.  Its physical role is the di/dt ("first droop") voltage term
+// v_L = L * di/dt that a purely-resistive PDN model cannot produce.
+//
+// It is integrated with the SAME backward-Euler / one-factorization structure
+// as the capacitors: an inductor L between p and q obeys
+//     v_p - v_q = L * di_L/dt.
+// Backward-Euler (di_L/dt ~ (i_k - i_{k-1})/dt) gives the companion model
+//     i_k = i_{k-1} + (dt/L) * (v_p - v_q),
+// i.e. a constant conductance g_L = dt/L stamped between p and q plus a per-step
+// history current source i_{k-1}.  Because dt is constant, g_L is constant, so
+// A = G + C/dt + (inductor conductances) is still factorized exactly once; only
+// the history current changes each step (a pure RHS update).
+struct InductorBranch
+{
+  int p = -1;             // node index of the branch's + terminal
+  int q = -1;             // node index of the branch's - terminal
+  double inductance = 0;  // series inductance [H] (> 0)
+  double i0 = 0.0;        // initial branch current i_L(0) [A], p -> q positive
+};
 
 // Result of a transient MNA solve.  All vectors are indexed by the same node
 // ordering as the input matrices.
@@ -108,6 +132,9 @@ inline double triangularPulseShape(double phase, double center, double duty)
 //               droop); if false it is the global maximum (ground bounce).
 //   observer  : optional per-step callback observer(k, t_k, v_k); used by unit
 //               tests to compare against an analytic reference.
+//   inductors : optional series-inductor branches (package/board L).  Each adds
+//               a constant conductance dt/L to the matrix plus a per-step
+//               history current, giving the di/dt inductive-droop term.
 //
 // Returns per-node min/max envelopes plus the worst-step snapshot.  Throws
 // std::runtime_error if the constant system matrix cannot be factorized.
@@ -120,7 +147,8 @@ inline TransientMNAResult solveTransientMNA(
     const std::function<Eigen::VectorXd(int, double)>& rhs_fn,
     bool track_min,
     const std::function<void(int, double, const Eigen::VectorXd&)>& observer
-    = {})
+    = {},
+    const std::vector<InductorBranch>& inductors = {})
 {
   const int n = static_cast<int>(g.rows());
 
@@ -134,6 +162,25 @@ inline TransientMNAResult solveTransientMNA(
     if (c_over_dt[i] != 0.0) {
       a_matrix.coeffRef(i, i) += c_over_dt[i];
     }
+  }
+
+  // Stamp the constant inductor-branch conductances g_L = dt/L.  These couple
+  // p and q; because dt is constant the stamp is constant, so the one-time
+  // factorization below still covers every step.  history[b] carries i_{k-1}.
+  std::vector<double> g_ind(inductors.size(), 0.0);
+  std::vector<double> ind_hist(inductors.size(), 0.0);
+  for (std::size_t b = 0; b < inductors.size(); ++b) {
+    const InductorBranch& br = inductors[b];
+    if (br.inductance <= 0.0 || br.p < 0 || br.q < 0) {
+      throw std::runtime_error("Transient MNA: invalid inductor branch");
+    }
+    const double gl = dt / br.inductance;
+    g_ind[b] = gl;
+    ind_hist[b] = br.i0;
+    a_matrix.coeffRef(br.p, br.p) += gl;
+    a_matrix.coeffRef(br.q, br.q) += gl;
+    a_matrix.coeffRef(br.p, br.q) -= gl;
+    a_matrix.coeffRef(br.q, br.p) -= gl;
   }
   a_matrix.makeCompressed();
 
@@ -157,13 +204,24 @@ inline TransientMNAResult solveTransientMNA(
   for (int k = 1; k <= nsteps; ++k) {
     const double t_k = k * dt;
 
-    // RHS = i(t_k) + (C/dt) * v_{k-1}.
+    // RHS = i(t_k) + (C/dt) * v_{k-1} + inductor history currents.
     Eigen::VectorXd rhs = rhs_fn(k, t_k);
     rhs += c_over_dt.cwiseProduct(v_prev);
+    // The inductor companion source injects the previous branch current: the
+    // current leaves p and enters q (KCL sign matches the g_L stamp above).
+    for (std::size_t b = 0; b < inductors.size(); ++b) {
+      rhs[inductors[b].p] -= ind_hist[b];
+      rhs[inductors[b].q] += ind_hist[b];
+    }
 
     const Eigen::VectorXd v_k = solver.solve(rhs);
     if (solver.info() != Eigen::ComputationInfo::Success) {
       throw std::runtime_error("Transient MNA: back-substitution failed");
+    }
+
+    // Advance each inductor branch current: i_k = i_{k-1} + (dt/L)(v_p - v_q).
+    for (std::size_t b = 0; b < inductors.size(); ++b) {
+      ind_hist[b] += g_ind[b] * (v_k[inductors[b].p] - v_k[inductors[b].q]);
     }
 
     result.v_min = result.v_min.cwiseMin(v_k);
