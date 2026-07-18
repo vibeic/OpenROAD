@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "AbstractGraphics.h"
 #include "clockBase.h"
@@ -134,11 +135,20 @@ void Replace::doIncrementalPlace(const int threads, const PlaceOptions& options)
 
   // Count placed vs unplaced, and conditionally lock them down
   auto block = db_->getChip()->getBlock();
+  std::vector<std::pair<odb::dbInst*, odb::Point>> frozen;
   for (auto inst : block->getInsts()) {
     auto status = inst->getPlacementStatus();
     if (status == odb::dbPlacementStatus::PLACED) {
       if (is_pbc_new) {
         pbc_->dbToPb(inst)->lock();
+      }
+      if (options.freezePlaced) {
+        // The locks alone should keep these still, but "frozen" has to mean
+        // the exact incoming coordinate, and the round trip through the
+        // gCell's float center and a truncating half-width subtraction can
+        // land a dbu off.  Recording the coordinate here lets us restore it
+        // and make the guarantee exact rather than approximate.
+        frozen.emplace_back(inst, inst->getLocation());
       }
       ++placed_cnt;
     } else if (!status.isPlaced()) {
@@ -188,6 +198,21 @@ void Replace::doIncrementalPlace(const int threads, const PlaceOptions& options)
 
   doInitialPlace(threads, locked_options);
   const int iter = doNesterovPlace(threads, locked_options);
+
+  if (options.freezePlaced) {
+    // The point of the freeze is that the incoming placement is the answer
+    // for those instances, so there is no second pass to run: unlocking here
+    // is exactly what would move them.
+    for (const auto& [inst, loc] : frozen) {
+      inst->setLocation(loc.x(), loc.y());
+    }
+    log_->info(GPL,
+               157,
+               "Keeping {} placed instances frozen; skipping the unlocked "
+               "overflow pass.",
+               placed_cnt);
+    return;
+  }
 
   // Finish the overflow resolution from the locked placement
   log_->info(GPL, 133, "Unlocking all instances");

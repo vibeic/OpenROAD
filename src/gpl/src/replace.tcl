@@ -10,6 +10,7 @@ sta::define_cmd_args "global_placement" {\
     [-routability_driven]\
     [-virtual_cts]\
     [-incremental]\
+    [-freeze_placed]\
     [-skip_io]\
     [-bin_grid_count grid_count]\
     [-density target_density]\
@@ -76,11 +77,16 @@ proc global_placement { args } {
       -routability_use_grt \
       -skip_io \
       -incremental \
+      -freeze_placed \
       -disable_revert_if_diverge \
       -disable_pin_density_adjust \
       -enable_routing_congestion}
 
   sta::check_argc_eq0 "global_placement" $args
+
+  if { [info exists flags(-freeze_placed)] && ![info exists flags(-incremental)] } {
+    utl::error GPL 158 "-freeze_placed requires -incremental."
+  }
 
   if { [info exists flags(-incremental)] } {
     gpl::replace_incremental_place_cmd [array get keys] [array get flags]

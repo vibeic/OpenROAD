@@ -14,6 +14,8 @@ or_integration_tests(
     density01
     diverge01
     error01
+    eco_freeze
+    eco_freeze_neg
     incremental01
     nograd01
     simple01

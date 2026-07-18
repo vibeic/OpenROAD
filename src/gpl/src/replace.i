@@ -34,6 +34,7 @@ static gpl::PlaceOptions getOptions(
       flags, "-disable_pin_density_adjust", options.disablePinDensityAdjust);
   checkFlag(
       flags, "-enable_routing_congestion", options.enable_routing_congestion);
+  checkFlag(flags, "-freeze_placed", options.freezePlaced);
   checkFlag(flags, "-force_center_initial_place", options.forceCenterInitialPlace);
   checkFlag(flags, "-skip_initial_place", [&](bool) {
     options.initialPlaceMaxIter = 0;
