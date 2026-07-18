@@ -17,6 +17,10 @@ class Finale
  public:
   Finale(odb::dbDatabase* db, utl::Logger* logger);
 
+  // Fill with no density target and no coupling relief -- the historical
+  // behavior, and the entry point the Python bindings expose.
+  void densityFill(const char* rules_filename, const odb::Rect& fill_area);
+
   void densityFill(const char* rules_filename,
                    const odb::Rect& fill_area,
                    bool density_target,

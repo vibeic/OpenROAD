@@ -1,0 +1,27 @@
+[INFO ODB-0227] LEF file: sky130hd/sky130hd.tlef, created 13 layers, 25 vias
+[INFO ODB-0128] Design: coupling_fill
+[INFO ODB-0132]     Created 2 special nets and 0 connections.
+[WARNING FIN-0010] Skipping layer nwell.
+[WARNING FIN-0010] Skipping layer pwell.
+[WARNING FIN-0010] Skipping layer li1.
+[WARNING FIN-0010] Skipping layer mcon.
+[INFO FIN-0003] Filling layer met1.
+[INFO FIN-0024] Layer met1: holding fill 5000 DBU away from 1 critical nets.
+[INFO FIN-0009] Filling 2 areas with non-OPC fill.
+[INFO FIN-0004] Total fills: 3500.
+[WARNING FIN-0010] Skipping layer via.
+[WARNING FIN-0010] Skipping layer met2.
+[WARNING FIN-0010] Skipping layer via2.
+[WARNING FIN-0010] Skipping layer met3.
+[WARNING FIN-0010] Skipping layer via3.
+[WARNING FIN-0010] Skipping layer met4.
+[WARNING FIN-0010] Skipping layer via4.
+[WARNING FIN-0010] Skipping layer met5.
+relief met1 fills 3500 min gap to crit 5000
+PASS min gap 5000 >= 5000
+--- halo band: expect 0 violations ---
+[INFO FIN-0014] Layer met1: 8 windows, density 0.1667 to 0.1667, 0 violations.
+violations 0
+[INFO FIN-0014] Layer met1: 8 windows, density 0.1667 to 0.1667, 0 violations.
+--- outside the halo: fill is still present ---
+[INFO FIN-0014] Layer met1: 8 windows, density 0.7438 to 0.7656, 0 violations.

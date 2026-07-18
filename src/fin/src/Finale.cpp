@@ -23,6 +23,12 @@ void Finale::setDebug()
 }
 
 void Finale::densityFill(const char* rules_filename,
+                         const odb::Rect& fill_area)
+{
+  densityFill(rules_filename, fill_area, false, 0, 0, 0.0, 1.0, {}, 0);
+}
+
+void Finale::densityFill(const char* rules_filename,
                          const odb::Rect& fill_area,
                          bool density_target,
                          int window,
