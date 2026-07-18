@@ -19,6 +19,12 @@ This command performs density fill to meet metal density DRC rules.
 density_fill
     [-rules rules_file]
     [-area {lx ly ux uy}]
+    [-min_density density]
+    [-max_density density]
+    [-density_window window]
+    [-density_step step]
+    [-critical_nets nets]
+    [-critical_halo halo]
 ```
 
 #### Options
@@ -27,6 +33,52 @@ density_fill
 | ----- | ----- |
 | `-rules` | Specify `json` rule file. |
 | `-area` | Optional. If not specified, the core area will be used. |
+| `-min_density` | Optional. Only fill density windows measuring below this density (0.0-1.0). |
+| `-max_density` | Optional. Never let fill push a density window above this density (0.0-1.0). |
+| `-density_window` | Required with `-min_density`/`-max_density`. Window edge length in microns. |
+| `-density_step` | Optional. Window slide in microns; defaults to `-density_window` (non-overlapping windows). |
+| `-critical_nets` | Optional. List of coupling-sensitive nets to hold fill away from. |
+| `-critical_halo` | Required with `-critical_nets`. Extra keep-out in microns around those nets. |
+
+Without `-min_density`/`-max_density` every fillable location is filled, which
+is the historical behavior. With them, the layer is divided into sliding
+windows and only the windows measuring below `-min_density` are filled, with
+each fill shape charged against every window it touches so that no window is
+driven past `-max_density`.
+
+`-critical_nets` holds fill an extra `-critical_halo` away from the named nets
+so that filling cannot load a timing-critical net with sidewall capacitance.
+The halo is applied on top of the rule file's `space_to_non_fill`.
+
+### Check Metal Density
+
+Reports the measured metal density of each sliding window and returns the
+number of windows falling outside `[-min_density, -max_density]`. Routing,
+special wires, instance shapes and existing fill all count as metal.
+
+```tcl
+check_metal_density
+    -window window
+    [-step step]
+    [-area {lx ly ux uy}]
+    [-min_density density]
+    [-max_density density]
+    [-layer layer]
+```
+
+#### Options
+
+| Switch Name | Description | 
+| ----- | ----- |
+| `-window` | Window edge length in microns. |
+| `-step` | Optional. Window slide in microns; defaults to `-window`. |
+| `-area` | Optional. If not specified, the core area will be used. |
+| `-min_density` | Optional. Lower bound, default `0.0`. |
+| `-max_density` | Optional. Upper bound, default `1.0`. |
+| `-layer` | Optional. Restrict the check to one layer; default is every routing layer. |
+
+Only windows lying entirely inside the area are evaluated, so a window never
+reports an artificially low density from hanging off the die edge.
 
 ## Example scripts
 
