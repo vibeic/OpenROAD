@@ -33,6 +33,7 @@ Verdict             : PASS
 [WARNING FIN-0010] Skipping layer met5.
 fills 1379
 PASS fill ran without an invented min (was 0 fills before the fix)
+[WARNING FIN-0053] This check measures the same windows density_fill's budget already constrained to 0.4000, so it confirms the budget rather than independently verifying density. Check at a finer step to reach windows that straddle two filled regions.
 ########## Metal density check ##########
 Window / step       : 100.0000 / 100.0000 um
 Windows measured    : 12
@@ -45,17 +46,18 @@ Over-density        : 0
 Violations          : 0
 Verdict             : PASS
 ########################################
-over_cap 0
+over_cap_selfcheck 0
+[WARNING FIN-0052] Checking density over window/step 100.0000/50.0000 um but the last density_fill was driven over 100.0000/100.0000 um; the two measure different windows.
 ########## Metal density check ##########
-Window / step       : 100.0000 / 100.0000 um
-Windows measured    : 12
-With density band   : 12
+Window / step       : 100.0000 / 50.0000 um
+Windows measured    : 48
+With density band   : 48
 No band (skipped)   : 0
 Lowest density      : 0.000000 (layer li1)
-Highest density     : 0.399998 (layer met1)
-Under-density       : 10
-Over-density        : 0
-Violations          : 10
+Highest density     : 0.400200 (layer met1)
+Under-density       : 43
+Over-density        : 1
+Violations          : 44
 Verdict             : FAIL
 ########################################
-[WARNING FIN-0022] Metal density check FAILED: 10 window(s) outside the per-layer density band (10 under, 0 over).
+[WARNING FIN-0022] Metal density check FAILED: 44 window(s) outside the per-layer density band (43 under, 1 over).

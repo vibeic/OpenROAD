@@ -31,7 +31,8 @@ Verdict             : FAIL
 [WARNING FIN-0010] Skipping layer met4.
 [WARNING FIN-0010] Skipping layer via4.
 [WARNING FIN-0010] Skipping layer met5.
---- check at the SAME 100/100 geometry: expect NO FIN-0052 ---
+--- check at the SAME 100/100 geometry: expect FIN-0053, not FIN-0052 ---
+[WARNING FIN-0053] This check measures the same windows density_fill's budget already constrained to 0.4000, so it confirms the budget rather than independently verifying density. Check at a finer step to reach windows that straddle two filled regions.
 ########## Metal density check ##########
 Window / step       : 100.0000 / 100.0000 um
 Windows measured    : 12
@@ -45,7 +46,7 @@ Violations          : 0
 Verdict             : PASS
 ########################################
 --- check at a DIFFERENT 50um window: expect FIN-0052 ---
-[WARNING FIN-0052] Checking density over window/step 50.0000/50.0000 um but the last density_fill was driven over 100.0000/100.0000 um; fill satisfied different windows than this check measures.
+[WARNING FIN-0052] Checking density over window/step 50.0000/50.0000 um but the last density_fill was driven over 100.0000/100.0000 um; the two measure different windows.
 ########## Metal density check ##########
 Window / step       : 50.0000 / 50.0000 um
 Windows measured    : 48
@@ -60,7 +61,7 @@ Verdict             : FAIL
 ########################################
 [WARNING FIN-0022] Metal density check FAILED: 4 window(s) outside the per-layer density band (0 under, 4 over).
 --- check at 100um window but 50um step: expect FIN-0052 ---
-[WARNING FIN-0052] Checking density over window/step 100.0000/50.0000 um but the last density_fill was driven over 100.0000/100.0000 um; fill satisfied different windows than this check measures.
+[WARNING FIN-0052] Checking density over window/step 100.0000/50.0000 um but the last density_fill was driven over 100.0000/100.0000 um; the two measure different windows.
 ########## Metal density check ##########
 Window / step       : 100.0000 / 50.0000 um
 Windows measured    : 48

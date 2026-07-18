@@ -133,7 +133,8 @@ The practical rules:
 
 - **Sign off at a step finer than you filled with.** Only a finer or offset grid
   reaches the windows that straddle two separately-budgeted regions — the ones
-  that can actually be over the cap.
+  that can actually be over the cap. A check on the fill's own grid returns 0
+  by construction and is not evidence of anything.
 - If you must sign off at step S, drive fill at a step no coarser than S.
 
 Divergent geometry is therefore the *useful* case, not the error case, which is

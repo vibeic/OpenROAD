@@ -31,5 +31,10 @@ if { $n > 0 } {
 } else {
   puts "FAIL fill did nothing -- the invented min_density 0.0 is back"
 }
-puts "over_cap [check_metal_density -window 100 -step 100 -max_density 0.40]"
-check_metal_density -window 100 -step 100 -min_density 0.10 -max_density 0.40
+# Same caveat as density_window: on the fill's own grid this is 0 by
+# construction and proves nothing. The falsifiable evidence that this test
+# exists for is `fills > 0` above -- that number was 0 before the fix and is
+# what the gate actually turns on.
+puts "over_cap_selfcheck [check_metal_density -window 100 -step 100 \
+  -max_density 0.40]"
+check_metal_density -window 100 -step 50 -min_density 0.10 -max_density 0.40

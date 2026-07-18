@@ -36,7 +36,27 @@ puts "--- density-driven fill, cap 0.40 ---"
 density_fill -rules fill_met1.json -min_density 0.30 -max_density 0.40 \
   -density_window 100 -density_step 100
 
-puts "--- post-fill: expect 0 windows above the 0.40 cap ---"
-puts "over_cap [check_metal_density -window 100 -step 100 -max_density 0.40]"
-check_metal_density -window 100 -step 100 -min_density 0.10 -max_density 0.40 \
+# CAP EVIDENCE. Read this carefully before trusting the numbers below.
+#
+# The first check re-uses the grid the fill was DRIVEN over. DensityBudget
+# rejects any shape that would push a budgeted window past the cap, so every
+# budgeted window is within it BY CONSTRUCTION and this check CANNOT return
+# anything but 0. It is the budget reading itself back, not evidence the cap
+# holds. It is kept only to catch a budget that is outright broken, and it is
+# labelled so nobody mistakes it for a signoff.
+puts "--- post-fill on the FILL'S OWN grid: 0 by construction, NOT evidence ---"
+puts "over_cap_selfcheck [check_metal_density -window 100 -step 100 \
+  -max_density 0.40]"
+
+# The falsifiable one. A finer step reaches windows that straddle two
+# separately-budgeted regions, which the budget never constrained. This is the
+# check that can go red, and TODAY IT IS RED: the cap does NOT hold at finer
+# offsets. Asserting the known-bad number rather than a hoped-for 0 is what
+# makes this a gate instead of a wish -- if someone later makes the budget
+# offset-robust, this goes green unexpectedly and they must update it
+# deliberately.
+puts "--- post-fill at a FINER step 50: cap does NOT hold; expect 1 ---"
+puts "over_cap_finer [check_metal_density -window 100 -step 50 \
+  -max_density 0.40]"
+check_metal_density -window 100 -step 50 -min_density 0.10 -max_density 0.40 \
   -report_file [make_result_file density_window_postfill.rpt]
