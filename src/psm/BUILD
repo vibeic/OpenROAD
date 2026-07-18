@@ -39,6 +39,7 @@ cc_library(
     ],
     hdrs = [
         "include/psm/MakePDNSim.hh",
+        "include/psm/em_signoff.h",
         "include/psm/pdnsim.h",
     ],
     includes = [

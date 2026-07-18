@@ -24,6 +24,26 @@ gtest_discover_tests(TestTransientRC
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# The EM current-density signoff rule engine (em_signoff.h) is likewise
+# header-only and dependency-free, so the correctness gate links no
+# OpenDB/OpenSTA machinery.
+add_executable(TestEMSignoff TestEMSignoff.cpp)
+
+target_include_directories(TestEMSignoff
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+)
+
+target_link_libraries(TestEMSignoff
+  GTest::gtest
+  GTest::gtest_main
+)
+
+gtest_discover_tests(TestEMSignoff
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 add_dependencies(build_and_test
   TestTransientRC
+  TestEMSignoff
 )
