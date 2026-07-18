@@ -21,6 +21,7 @@
 #include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "odb/geom.h"
+#include "psm/em_signoff.h"
 #include "psm/pdnsim.h"
 #include "utl/Logger.h"
 
@@ -151,6 +152,14 @@ class IRSolver
   void report(sta::Scene* corner) const;
   void reportEM(sta::Scene* corner) const;
   void reportTransient(sta::Scene* corner) const;
+
+  // EM current-density signoff (EM3): compute J = I/A per current-carrying
+  // segment from the solved current map and this design's LEF geometry, then
+  // flag every segment whose J exceeds the per-layer limit.  Requires a prior
+  // static solve (hasSolution).  Optionally writes a per-segment CSV report.
+  EMSignoffResult checkCurrentDensity(sta::Scene* corner,
+                                      const EMLimits& limits,
+                                      const std::string& report_file) const;
 
   Results getSolution(sta::Scene* corner) const;
   TransientResults getTransientSolution(sta::Scene* corner) const;

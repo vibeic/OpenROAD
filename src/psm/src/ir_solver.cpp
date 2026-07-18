@@ -1928,6 +1928,115 @@ void IRSolver::reportEM(sta::Scene* corner) const
                   results.avg_current);
 }
 
+EMSignoffResult IRSolver::checkCurrentDensity(
+    sta::Scene* corner,
+    const EMLimits& limits,
+    const std::string& report_file) const
+{
+  EMSignoffResult empty;
+  if (!hasSolution(corner)) {
+    logger_->warn(utl::PSM,
+                  111,
+                  "No power-grid solution for net {} on corner {}; run "
+                  "analyze_power_grid before check_current_density.",
+                  net_->getName(),
+                  corner->name());
+    return empty;
+  }
+
+  // Build the per-segment (current, cross-section) list from the solved current
+  // map + this design's LEF geometry, then hand the pure J = I/A rule engine the
+  // job of classifying against the per-layer limits.
+  const double dbu = getBlock()->getDbUnitsPerMicron();
+  const double dbu2 = dbu * dbu;
+
+  std::vector<EMWireCurrent> wires;
+  for (const auto& [connection, current] : generateCurrentMap(corner)) {
+    const double area_dbu2 = connection->getCrossSectionAreaDBU2();
+
+    EMWireCurrent wire;
+    wire.current_a = current;
+    wire.area_um2 = area_dbu2 / dbu2;  // <= 0 => engine skips (no geometry)
+    wire.is_via = connection->isVia();
+
+    const Node* node0 = connection->getNode0();
+    const Node* node1 = connection->getNode1();
+    if (node0 != nullptr && node0->getLayer() != nullptr) {
+      wire.layer = node0->getLayer()->getName();
+      const odb::Point& p0 = node0->getPoint();
+      wire.x0 = p0.getX() / dbu;
+      wire.y0 = p0.getY() / dbu;
+    }
+    if (node1 != nullptr) {
+      const odb::Point& p1 = node1->getPoint();
+      wire.x1 = p1.getX() / dbu;
+      wire.y1 = p1.getY() / dbu;
+    }
+    wires.push_back(std::move(wire));
+  }
+
+  const EMSignoffResult results = classifyCurrentDensity(wires, limits);
+
+  if (!report_file.empty()) {
+    std::ofstream report(report_file);
+    if (!report) {
+      logger_->error(
+          utl::PSM, 113, "Unable to open {} to write EM signoff report",
+          report_file);
+    }
+    report << "Layer,Node0 X,Node0 Y,Node1 X,Node1 Y,Current(A),Area(um^2),"
+              "J(A/um^2),Jlimit(A/um^2),Ratio,Status\n";
+    for (const auto& w : results.wires) {
+      const char* status = w.limit <= 0.0 ? "NO_LIMIT"
+                           : w.violated   ? "VIOLATED"
+                                          : "OK";
+      report << w.layer << "," << fmt::format("{:.4f}", w.x0) << ","
+             << fmt::format("{:.4f}", w.y0) << ","
+             << fmt::format("{:.4f}", w.x1) << ","
+             << fmt::format("{:.4f}", w.y1) << ","
+             << fmt::format("{:.3e}", w.current_a) << ","
+             << fmt::format("{:.4e}", w.area_um2) << ","
+             << fmt::format("{:.3e}", w.j) << ","
+             << fmt::format("{:.3e}", w.limit) << ","
+             << fmt::format("{:.3f}", w.ratio) << "," << status << '\n';
+    }
+  }
+
+  logger_->report("########## EM current-density signoff ##########");
+  logger_->report("Net                : {}", net_->getName());
+  logger_->report("Corner             : {}", corner->name());
+  logger_->report("Segments checked   : {}", results.checked);
+  logger_->report("With J-limit       : {}", results.limited);
+  logger_->report("No J-limit (skipped): {}", results.skipped_no_limit);
+  logger_->report("Worst J            : {:3.3e} A/um^2 (layer {})",
+                  results.worst_j,
+                  results.worst_layer.empty() ? "-" : results.worst_layer);
+  logger_->report("Worst J-limit      : {:3.3e} A/um^2", results.worst_limit);
+  logger_->report("Worst utilization  : {:3.2f} %", 100.0 * results.worst_ratio);
+  logger_->report("Violations         : {}", results.violations);
+  logger_->report("Verdict            : {}",
+                  results.pass() ? "PASS" : "FAIL");
+  logger_->report("###############################################");
+
+  if (results.violations > 0) {
+    logger_->warn(utl::PSM,
+                  112,
+                  "EM current-density signoff FAILED for net {}: {} segment(s) "
+                  "exceed the per-layer J-limit (worst {:.1f}% of limit on {}).",
+                  net_->getName(),
+                  results.violations,
+                  100.0 * results.worst_ratio,
+                  results.worst_layer.empty() ? "-" : results.worst_layer);
+  }
+
+  logger_->metric(getMetricKey("design_powergrid__em__violations", corner),
+                  results.violations);
+  logger_->metric(getMetricKey("design_powergrid__em__worst_ratio", corner),
+                  results.worst_ratio);
+
+  return results;
+}
+
 bool IRSolver::hasTransientSolution(sta::Scene* corner) const
 {
   return transient_results_.find(corner) != transient_results_.end();

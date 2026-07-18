@@ -61,6 +61,12 @@ class Connection
   virtual Resistance getResistance(const ResistanceMap& res_map) const = 0;
   Conductance getConductance(const ResistanceMap& res_map) const;
 
+  // Current-carrying cross-section for EM current-density (J = I/A) signoff,
+  // in DBU^2.  Returns 0 when the geometry needed to form a cross-section is
+  // not available for this connection type (default), so a segment with no
+  // usable geometry is simply skipped by the EM engine rather than flagged.
+  virtual double getCrossSectionAreaDBU2() const { return 0.0; }
+
   virtual bool isVia() const { return false; }
   virtual bool isValid() const = 0;
   bool isLoop() const { return node0_ == node1_; }
@@ -97,6 +103,8 @@ class LayerConnection : public Connection
   LayerConnection(Node* node0, Node* node1, int length, int width);
 
   Resistance getResistance(const ResistanceMap& res_map) const override;
+  // width * layer-thickness [DBU^2]; 0 if the layer has no THICKNESS.
+  double getCrossSectionAreaDBU2() const override;
   bool isValid() const override;
 
   void mergeWith(const Connection* other) override;

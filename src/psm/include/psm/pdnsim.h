@@ -11,6 +11,7 @@
 #include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "odb/dbBlockCallBackObj.h"
+#include "psm/em_signoff.h"
 
 namespace odb {
 class dbDatabase;
@@ -109,6 +110,19 @@ class PDNSim : public odb::dbBlockCallBackObj
                                const std::string& vectored_profile,
                                double package_r,
                                double package_l);
+  // EM current-density signoff (EM3): flag every current-carrying segment whose
+  // DC current density J = I/A exceeds a per-layer limit.  Reuses (or computes)
+  // the static power-grid solution, then runs the pure J = I/A rule engine.
+  // default_limit / limits_file supply the per-layer J-limits [A/um^2]; the
+  // limits_file (when non-empty) is parsed as "<layer_name> <A_per_um2>" rows.
+  EMSignoffResult checkCurrentDensity(odb::dbNet* net,
+                                      sta::Scene* corner,
+                                      GeneratedSourceType source_type,
+                                      const std::string& voltage_source_file,
+                                      bool use_prev_solution,
+                                      double default_limit,
+                                      const std::string& limits_file,
+                                      const std::string& report_file);
   void writeSpiceNetwork(odb::dbNet* net,
                          sta::Scene* corner,
                          GeneratedSourceType source_type,

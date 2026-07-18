@@ -4,8 +4,10 @@
 #include "psm/pdnsim.h"
 
 #include <algorithm>
+#include <fstream>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -112,6 +114,72 @@ void PDNSim::analyzePowerGrid(odb::dbNet* net,
   }
 
   solver->writeInstanceVoltageFile(voltage_file, corner);
+}
+
+EMSignoffResult PDNSim::checkCurrentDensity(
+    odb::dbNet* net,
+    sta::Scene* corner,
+    GeneratedSourceType source_type,
+    const std::string& voltage_source_file,
+    bool use_prev_solution,
+    double default_limit,
+    const std::string& limits_file,
+    const std::string& report_file)
+{
+  if (!checkConnectivity(net, false, "", false)) {
+    return EMSignoffResult{};
+  }
+
+  // Assemble the per-layer J-limits.  A per-layer file wins over the uniform
+  // default for the layers it names; unnamed layers fall back to default_limit.
+  EMLimits limits;
+  limits.default_limit = default_limit;
+  if (!limits_file.empty()) {
+    std::ifstream lf(limits_file);
+    if (!lf) {
+      logger_->error(
+          utl::PSM, 114, "Unable to open EM limits file {}", limits_file);
+    }
+    std::string line;
+    int nrows = 0;
+    while (std::getline(lf, line)) {
+      // Strip a trailing comment and skip blank lines.
+      const auto hash = line.find('#');
+      if (hash != std::string::npos) {
+        line = line.substr(0, hash);
+      }
+      std::istringstream ss(line);
+      std::string layer;
+      double value = 0.0;
+      if (ss >> layer >> value) {
+        limits.per_layer[layer] = value;
+        nrows++;
+      }
+    }
+    logger_->info(utl::PSM,
+                  115,
+                  "Loaded {} per-layer EM current-density limit(s) from {}.",
+                  nrows,
+                  limits_file);
+  }
+
+  if (limits.empty()) {
+    logger_->warn(utl::PSM,
+                  116,
+                  "No EM current-density limit supplied (-em_limit / "
+                  "-em_limits_file); every segment is reported as NO_LIMIT and "
+                  "the check cannot fail.  Provide the PDK per-layer J-limits "
+                  "for a real signoff.");
+  }
+
+  last_net_ = net;
+  last_corner_ = corner;
+  auto* solver = getIRSolver(net, false);
+  if (!use_prev_solution || !solver->hasSolution(corner)) {
+    solver->solve(corner, source_type, voltage_source_file);
+  }
+
+  return solver->checkCurrentDensity(corner, limits, report_file);
 }
 
 void PDNSim::analyzePowerGridDynamic(odb::dbNet* net,

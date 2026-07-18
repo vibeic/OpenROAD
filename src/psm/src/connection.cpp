@@ -4,6 +4,7 @@
 #include "connection.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
@@ -147,6 +148,26 @@ Connection::Resistance LayerConnection::getResistance(
 {
   const double squares = static_cast<double>(length_) / width_;
   return squares * res_map.at(node0_->getLayer());
+}
+
+double LayerConnection::getCrossSectionAreaDBU2() const
+{
+  // A wire's current-carrying cross-section is (width x metal-thickness).  The
+  // width is tracked on the connection; the thickness comes from the LEF layer.
+  // When the PDK omits THICKNESS we cannot form a physical cross-section, so we
+  // return 0 and let the EM engine skip the segment (never a false violation).
+  if (node0_ == nullptr) {
+    return 0.0;
+  }
+  odb::dbTechLayer* layer = node0_->getLayer();
+  if (layer == nullptr) {
+    return 0.0;
+  }
+  uint32_t thickness = 0;
+  if (!layer->getThickness(thickness) || thickness == 0) {
+    return 0.0;
+  }
+  return static_cast<double>(width_) * static_cast<double>(thickness);
 }
 
 std::string LayerConnection::describe() const

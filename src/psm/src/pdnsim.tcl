@@ -181,6 +181,63 @@ proc analyze_power_grid { args } {
     $voltage_source_file
 }
 
+sta::define_cmd_args "check_current_density" {
+  -net net_name
+  [-corner corner]
+  [-em_limit limit]
+  [-em_limits_file file]
+  [-em_report report_file]
+  [-vsrc voltage_source_file]
+  [-source_type FULL|BUMPS|STRAPS]
+  [-allow_reuse]
+}
+
+proc check_current_density { args } {
+  sta::parse_key_args "check_current_density" args \
+    keys {-net -corner -em_limit -em_limits_file -em_report -vsrc -source_type} \
+    flags {-allow_reuse}
+
+  if { ![info exists keys(-net)] } {
+    utl::error PSM 117 "Argument -net not specified."
+  }
+
+  set default_limit 0.0
+  if { [info exists keys(-em_limit)] } {
+    set default_limit $keys(-em_limit)
+    sta::check_positive_float "-em_limit" $default_limit
+  }
+
+  set limits_file ""
+  if { [info exists keys(-em_limits_file)] } {
+    set limits_file $keys(-em_limits_file)
+  }
+
+  set report_file ""
+  if { [info exists keys(-em_report)] } {
+    set report_file $keys(-em_report)
+  }
+
+  set voltage_source_file ""
+  if { [info exists keys(-vsrc)] } {
+    set voltage_source_file $keys(-vsrc)
+  }
+
+  set source_type "BUMPS"
+  if { [info exists keys(-source_type)] } {
+    set source_type $keys(-source_type)
+  }
+
+  return [psm::check_current_density_cmd \
+    [psm::find_net $keys(-net)] \
+    [sta::parse_scene_or_default keys] \
+    $source_type \
+    $voltage_source_file \
+    [info exists flags(-allow_reuse)] \
+    $default_limit \
+    $limits_file \
+    $report_file]
+}
+
 sta::define_cmd_args "insert_decap" { -target_cap target_cap\
                                       -cells cell_info\
                                       [-net net_name]\

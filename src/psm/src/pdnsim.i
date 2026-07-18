@@ -68,6 +68,14 @@ analyze_power_grid_dynamic_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSou
   pdnsim->analyzePowerGridDynamic(net, corner, type, voltage_file, error_file, voltage_source_file, period, steps, num_periods, node_cap, total_cap, decap_cap, current_duty, phase_spread, current_profile, vectored_profile, package_r, package_l);
 }
 
+int
+check_current_density_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceType type, const char* voltage_source_file, bool reuse_solution, double default_limit, const char* limits_file, const char* report_file)
+{
+  PDNSim* pdnsim = getPDNSim();
+  const psm::EMSignoffResult res = pdnsim->checkCurrentDensity(net, corner, type, voltage_source_file, reuse_solution, default_limit, limits_file, report_file);
+  return static_cast<int>(res.violations);
+}
+
 void
 add_decap_master(odb::dbMaster *master, float cap)
 {
