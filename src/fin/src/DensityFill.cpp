@@ -7,7 +7,6 @@
 #include <array>
 #include <iterator>
 #include <memory>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -303,7 +302,7 @@ static Polygon90Set orNonFills(dbBlock* block, dbTechLayer* layer)
 // Used to hold fill away from coupling-sensitive (timing-critical) nets.
 static Polygon90Set orNets(dbBlock* block,
                            dbTechLayer* layer,
-                           const std::set<odb::dbNet*>& nets)
+                           const odb::PtrSet<odb::dbNet>& nets)
 {
   Polygon90Set result;
   dbShape shape;

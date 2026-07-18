@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include <set>
-
+#include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "odb/geom.h"
 #include "utl/Logger.h"
@@ -25,7 +24,7 @@ class Finale
                    int step,
                    double min_density,
                    double max_density,
-                   const std::set<odb::dbNet*>& critical_nets,
+                   const odb::PtrSet<odb::dbNet>& critical_nets,
                    int critical_halo);
 
   // Report metal-density windows outside [min_density, max_density].

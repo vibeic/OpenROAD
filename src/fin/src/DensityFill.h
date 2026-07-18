@@ -5,7 +5,6 @@
 
 #include <map>
 #include <memory>
-#include <set>
 #include <vector>
 
 #include "boost/property_tree/json_parser.hpp"
@@ -39,7 +38,7 @@ struct DensityTarget
 // cannot absorb it are given a halo larger than the plain fill spacing.
 struct CouplingRelief
 {
-  std::set<odb::dbNet*> nets;
+  odb::PtrSet<odb::dbNet> nets;
   int halo = 0;  // DBU
 };
 

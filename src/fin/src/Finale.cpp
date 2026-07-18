@@ -29,7 +29,7 @@ void Finale::densityFill(const char* rules_filename,
                          int step,
                          double min_density,
                          double max_density,
-                         const std::set<odb::dbNet*>& critical_nets,
+                         const odb::PtrSet<odb::dbNet>& critical_nets,
                          int critical_halo)
 {
   DensityTarget target;

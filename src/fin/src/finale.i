@@ -2,10 +2,11 @@
 // Copyright (c) 2020-2025, The OpenROAD Authors
 
 %{
-#include <set>
+#include <string>
 
 #include "ord/OpenRoad.hh"
 #include "fin/Finale.h"
+#include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "utl/Logger.h"
 
@@ -38,7 +39,7 @@ density_fill_cmd(const char* rules_filename,
 
   // critical_net_names is a space separated list; an empty string disables
   // coupling relief entirely.
-  std::set<odb::dbNet*> critical_nets;
+  odb::PtrSet<odb::dbNet> critical_nets;
   std::string names(critical_net_names ? critical_net_names : "");
   size_t pos = 0;
   while (pos < names.size()) {
