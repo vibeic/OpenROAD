@@ -1,0 +1,68 @@
+[INFO ODB-0227] LEF file: sky130hd/sky130hd.tlef, created 13 layers, 25 vias
+[INFO ODB-0128] Design: density_fixture
+[INFO ODB-0132]     Created 1 special nets and 0 connections.
+########## Metal density check ##########
+Window / step       : 100.0000 / 100.0000 um
+Windows measured    : 6
+With density band   : 6
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.250000 (layer met1)
+Under-density       : 0
+Over-density        : 0
+Violations          : 0
+Verdict             : PASS
+########################################
+one 100x100 window: density 0.250000
+########## Metal density check ##########
+Window / step       : 50.0000 / 50.0000 um
+Windows measured    : 24
+With density band   : 24
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 1.000000 (layer met1)
+Under-density       : 0
+Over-density        : 0
+Violations          : 0
+Verdict             : PASS
+########################################
+four 50x50 windows: 1 at density 1.0, 3 at density 0.0
+########## Metal density check ##########
+Window / step       : 50.0000 / 50.0000 um
+Windows measured    : 24
+With density band   : 24
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 1.000000 (layer met1)
+Under-density       : 23
+Over-density        : 0
+Violations          : 23
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 23 window(s) outside the per-layer density band (23 under, 0 over).
+########## Metal density check ##########
+Window / step       : 50.0000 / 50.0000 um
+Windows measured    : 24
+With density band   : 24
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 1.000000 (layer met1)
+Under-density       : 0
+Over-density        : 1
+Violations          : 1
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 1 window(s) outside the per-layer density band (0 under, 1 over).
+of 24 windows, min 0.5 flags 23 and max 0.5 flags 1 (complementary)
+[WARNING FIN-0025] No metal density band supplied (-min_density / -max_density / -limits_file); every window is reported as NO_LIMIT and the check cannot fail.  Provide the PDK per-layer band for a real signoff.
+########## Metal density check ##########
+Window / step       : 50.0000 / 50.0000 um
+Windows measured    : 24
+With density band   : 0
+No band (skipped)   : 24
+Under-density       : 0
+Over-density        : 0
+Violations          : 0
+Verdict             : PASS
+########################################
+no band: 0 violations
