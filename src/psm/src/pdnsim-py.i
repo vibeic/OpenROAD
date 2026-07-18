@@ -26,4 +26,8 @@ WRAP_OBJECT_RETURN_REF(psm::PDNSim::IRDropByPoint, ir_drop);
 // do not wrap it for Python.
 %ignore psm::PDNSim::checkCurrentDensity;
 
+// Signal-net EM likewise returns a rich SignalEMResult struct (psm/signal_em.h,
+// not %included here) and is driven from the Tcl side.
+%ignore psm::PDNSim::checkSignalEM;
+
 %include "psm/pdnsim.h"

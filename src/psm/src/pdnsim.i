@@ -76,6 +76,14 @@ check_current_density_cmd(odb::dbNet* net, Scene* corner, psm::GeneratedSourceTy
   return static_cast<int>(res.violations);
 }
 
+int
+check_signal_em_cmd(Scene* corner, double supply_voltage, double toggle_rate, const char* activity_file, double avg_limit, double rms_limit, double peak_limit, const char* limits_file, const char* report_file)
+{
+  PDNSim* pdnsim = getPDNSim();
+  const psm::SignalEMResult res = pdnsim->checkSignalEM(corner, supply_voltage, toggle_rate, activity_file, avg_limit, rms_limit, peak_limit, limits_file, report_file);
+  return static_cast<int>(res.violations);
+}
+
 void
 add_decap_master(odb::dbMaster *master, float cap)
 {

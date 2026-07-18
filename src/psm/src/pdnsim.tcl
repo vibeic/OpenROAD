@@ -238,6 +238,81 @@ proc check_current_density { args } {
     $report_file]
 }
 
+sta::define_cmd_args "check_signal_em" {
+  [-corner corner]
+  [-supply_voltage volts]
+  [-toggle_rate transitions_per_second]
+  [-activity_file file]
+  [-avg_limit limit]
+  [-rms_limit limit]
+  [-peak_limit limit]
+  [-em_limits_file file]
+  [-em_report report_file]
+}
+
+proc check_signal_em { args } {
+  sta::parse_key_args "check_signal_em" args \
+    keys {-corner -supply_voltage -toggle_rate -activity_file -avg_limit \
+          -rms_limit -peak_limit -em_limits_file -em_report} \
+    flags {}
+
+  set supply_voltage 0.0
+  if { [info exists keys(-supply_voltage)] } {
+    set supply_voltage $keys(-supply_voltage)
+    sta::check_positive_float "-supply_voltage" $supply_voltage
+  }
+
+  set toggle_rate 0.0
+  if { [info exists keys(-toggle_rate)] } {
+    set toggle_rate $keys(-toggle_rate)
+    sta::check_positive_float "-toggle_rate" $toggle_rate
+  }
+
+  set activity_file ""
+  if { [info exists keys(-activity_file)] } {
+    set activity_file $keys(-activity_file)
+  }
+
+  set avg_limit 0.0
+  if { [info exists keys(-avg_limit)] } {
+    set avg_limit $keys(-avg_limit)
+    sta::check_positive_float "-avg_limit" $avg_limit
+  }
+
+  set rms_limit 0.0
+  if { [info exists keys(-rms_limit)] } {
+    set rms_limit $keys(-rms_limit)
+    sta::check_positive_float "-rms_limit" $rms_limit
+  }
+
+  set peak_limit 0.0
+  if { [info exists keys(-peak_limit)] } {
+    set peak_limit $keys(-peak_limit)
+    sta::check_positive_float "-peak_limit" $peak_limit
+  }
+
+  set limits_file ""
+  if { [info exists keys(-em_limits_file)] } {
+    set limits_file $keys(-em_limits_file)
+  }
+
+  set report_file ""
+  if { [info exists keys(-em_report)] } {
+    set report_file $keys(-em_report)
+  }
+
+  return [psm::check_signal_em_cmd \
+    [sta::parse_scene_or_default keys] \
+    $supply_voltage \
+    $toggle_rate \
+    $activity_file \
+    $avg_limit \
+    $rms_limit \
+    $peak_limit \
+    $limits_file \
+    $report_file]
+}
+
 sta::define_cmd_args "insert_decap" { -target_cap target_cap\
                                       -cells cell_info\
                                       [-net net_name]\
