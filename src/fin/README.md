@@ -109,6 +109,22 @@ The division of labour:
 | Answers | is this design within the band? | fill the short windows, without overshooting |
 | Needs a band? | yes, or it reports `NO_LIMIT` | only if you pass a density target |
 
+#### The cap is guaranteed on the window grid you filled with
+
+`-max_density` is enforced against the windows the fill was driven over, and
+only those. A window that exists only at some *other* offset was never in the
+budget, so it can exceed the cap. This is measurable on the fixture in
+`density_geometry_mismatch`: fill driven at window/step 100/100 measures a peak
+of **0.399998** and PASSES its 0.40 cap on that grid, and the very same design
+measured at 100/50 — where a window straddles two separately-budgeted regions —
+peaks at **0.400200** and FAILS.
+
+That is not the budget misbehaving; it is what a per-window budget can promise.
+The practical rule: **if you intend to sign off at step S, drive fill at a step
+no coarser than S.** `check_metal_density` warns (FIN-0052) whenever it is run
+over different geometry than the last `density_fill` used, so the mismatch
+surfaces instead of shipping as a surprise FAIL.
+
 Note this is the DEF-stage pair. It is complementary to, not a replacement for,
 a post-streamout GDS density pass: fill inserted here is visible to routing and
 extraction, which is precisely why it has to be bounded by `-max_density`.
