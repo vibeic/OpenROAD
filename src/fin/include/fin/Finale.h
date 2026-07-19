@@ -3,6 +3,10 @@
 
 #pragma once
 
+#include <string>
+
+#include "fin/density_check.h"
+#include "odb/PtrSetMap.h"
 #include "odb/db.h"
 #include "odb/geom.h"
 #include "utl/Logger.h"
@@ -16,7 +20,28 @@ class Finale
  public:
   Finale(odb::dbDatabase* db, utl::Logger* logger);
 
+  // Fill with no density target and no coupling relief -- the historical
+  // behavior, and the entry point the Python bindings expose.
   void densityFill(const char* rules_filename, const odb::Rect& fill_area);
+
+  void densityFill(const char* rules_filename,
+                   const odb::Rect& fill_area,
+                   bool density_target,
+                   int window,
+                   int step,
+                   double min_density,
+                   double max_density,
+                   const odb::PtrSet<odb::dbNet>& critical_nets,
+                   int critical_halo);
+
+  // Metal density check (FL1): measure per-window, per-layer metal density over
+  // check_area and flag every window outside the per-layer [min, max] band.
+  // window/step are in DBU; a non-positive step means step = window.
+  DensityCheckResult checkDensity(const odb::Rect& check_area,
+                                  int window,
+                                  int step,
+                                  const DensityLimits& limits,
+                                  const std::string& report_file);
 
   void setDebug();
 

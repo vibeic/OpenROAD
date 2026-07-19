@@ -13,6 +13,7 @@ target_sources(fin
   PRIVATE
     src/Finale.cpp
     src/MakeFinale.cpp
+    src/DensityCheck.cpp
     src/DensityFill.cpp
     src/graphics.cpp
 )

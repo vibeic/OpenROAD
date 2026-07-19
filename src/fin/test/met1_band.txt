@@ -1,0 +1,3 @@
+# met1 only; every other layer stays NO_LIMIT and cannot violate,
+# so the counts below are met1 windows and nothing else.
+met1 0.30 0.40

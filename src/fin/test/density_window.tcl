@@ -1,0 +1,81 @@
+# Density-driven fill (FL1 actuator half), gated through the SHARED measurement
+# core -- the same check_metal_density the signoff half uses.
+#
+# Fixture: 200um x 100um die, one met1 special-wire rect covering
+# (0, 25) - (50, 75) um  =>  50um x 50um = 2500 um^2 of metal.
+# With -window 100 -step 100 the die holds two 100um x 100um windows:
+#   window (0,0)-(100,100):   2500 / 10000 = 0.2500  <- hand computed
+#   window (100,0)-(200,100):    0 / 10000 = 0.0000
+#
+# met1 is the only layer carrying metal; the other routing layers measure
+# 0.0000, so the violation counts below are per-layer multiples.
+source helpers.tcl
+
+read_lef sky130hd/sky130hd.tlef
+read_def density_window.def
+
+# Hand-computed density, reproduced by the measurement core.
+puts "--- measure: expect met1 windows at 0.2500 and 0.0000 ---"
+check_metal_density -window 100 -step 100 -min_density 0.10 -max_density 0.90 \
+  -report_file [make_result_file density_window_measure.rpt]
+
+# Boundary sharpness, both directions.  0.2500 is inclusive on each bound, so
+# the count must step by exactly one met1 window as the bound crosses it.
+puts "--- min 0.2500 (inclusive, met1 full window must NOT violate) ---"
+puts "min_at   [check_metal_density -window 100 -step 100 -min_density 0.2500]"
+puts "--- min 0.2501 (just outside, met1 full window MUST violate) ---"
+puts "min_over [check_metal_density -window 100 -step 100 -min_density 0.2501]"
+puts "--- max 0.2500 (inclusive, met1 full window must NOT violate) ---"
+puts "max_at   [check_metal_density -window 100 -step 100 -max_density 0.2500]"
+puts "--- max 0.2499 (just outside, met1 full window MUST violate) ---"
+puts "max_over [check_metal_density -window 100 -step 100 -max_density 0.2499]"
+
+# Density-driven fill: both met1 windows are below 0.30 so both are topped up,
+# and the per-window budget must stop before any window passes 0.40.
+puts "--- density-driven fill, cap 0.40 ---"
+density_fill -rules fill_met1.json -min_density 0.30 -max_density 0.40 \
+  -density_window 100 -density_step 100
+
+# CAP EVIDENCE. Read this carefully before trusting the numbers below.
+#
+# The first check re-uses the grid the fill was DRIVEN over. DensityBudget
+# rejects any shape that would push a budgeted window past the cap, so every
+# budgeted window is within it BY CONSTRUCTION and this check CANNOT return
+# anything but 0. It is the budget reading itself back, not evidence the cap
+# holds. It is kept only to catch a budget that is outright broken, and it is
+# labelled so nobody mistakes it for a signoff.
+puts "--- post-fill on the FILL'S OWN grid: 0 by construction, NOT evidence ---"
+puts "over_cap_selfcheck [check_metal_density -window 100 -step 100 \
+  -max_density 0.40]"
+
+# The falsifiable one. A finer step reaches windows that straddle two
+# separately-budgeted regions, which the budget never constrained. This is the
+# check that can go red, and TODAY IT IS RED: the cap does NOT hold at finer
+# offsets. Asserting the known-bad number rather than a hoped-for 0 is what
+# makes this a gate instead of a wish -- if someone later makes the budget
+# offset-robust, this goes green unexpectedly and they must update it
+# deliberately.
+puts "--- post-fill at a FINER step 50: cap does NOT hold; expect 1 ---"
+puts "over_cap_finer [check_metal_density -window 100 -step 50 \
+  -max_density 0.40]"
+
+# BOTH bounds are grid-relative, not just the cap. met1_band.txt bands met1
+# alone, so every other routing layer is NO_LIMIT and the counts below are
+# met1 windows and nothing else -- no inference from totals.
+#
+#   on the fill grid (100/100): 2 met1 windows, 0 violations   -> looks clean
+#   at an offset grid (100/50): 8 met1 windows, 6 violations   -> 5 UNDER, 1 OVER
+#
+# The under-density count is the larger one: filling a window to >= min does
+# not stop a window at another origin from being short, because nothing
+# controls where inside a window the metal lands. Both numbers are asserted as
+# the known-bad values, so making the budget offset-robust turns them green
+# unexpectedly and forces a deliberate update.
+puts "--- met1-only band on the FILL grid: expect 0 ---"
+puts "band_selfgrid [check_metal_density -window 100 -step 100 \
+  -limits_file met1_band.txt]"
+puts "--- met1-only band at an OFFSET grid: expect 6 (5 under + 1 over) ---"
+puts "band_offset [check_metal_density -window 100 -step 50 \
+  -limits_file met1_band.txt]"
+check_metal_density -window 100 -step 50 -min_density 0.10 -max_density 0.40 \
+  -report_file [make_result_file density_window_postfill.rpt]

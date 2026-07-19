@@ -3,9 +3,12 @@
 
 #include "DensityFill.h"
 
+#include "DensityCheck.h"
+
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <utility>
@@ -298,6 +301,137 @@ static Polygon90Set orNonFills(dbBlock* block, dbTechLayer* layer)
   return non_fill;
 }
 
+// Build a polygon set of the shapes of the given nets on the given layer.
+// Used to hold fill away from coupling-sensitive (timing-critical) nets.
+static Polygon90Set orNets(dbBlock* block,
+                           dbTechLayer* layer,
+                           const odb::PtrSet<odb::dbNet>& nets)
+{
+  Polygon90Set result;
+  dbShape shape;
+
+  dbWireShapeItr shapes;
+  std::vector<dbShape> via_shapes;
+  for (auto net : nets) {
+    if (dbWire* wire = net->getWire()) {
+      for (shapes.begin(wire); shapes.next(shape);) {
+        insertShape(shape, result, layer);
+      }
+    }
+    for (auto swire : net->getSWires()) {
+      for (auto sbox : swire->getWires()) {
+        if (sbox->isVia()) {
+          dbVia* via = sbox->getBlockVia();
+          Rect rect = sbox->getBox();
+          shape.setVia(via, rect);
+          dbShape::getViaBoxes(shape, via_shapes);
+          for (auto& via_shape : via_shapes) {
+            insertShape(via_shape, result, layer);
+          }
+        } else if (sbox->getTechLayer() == layer) {
+          result.insert(
+              makeRect(sbox->xMin(), sbox->yMin(), sbox->xMax(), sbox->yMax()));
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// Build a polygon set of the fill already present on the given layer.
+static Polygon90Set orFills(dbBlock* block, dbTechLayer* layer)
+{
+  Polygon90Set fills;
+  for (auto fill : block->getFills()) {
+    if (fill->getTechLayer() != layer) {
+      continue;
+    }
+    Rect rect;
+    fill->getRect(rect);
+    fills.insert(makeRect(rect.xMin(), rect.yMin(), rect.xMax(), rect.yMax()));
+  }
+  return fills;
+}
+
+// Charges fill shapes against a per-window metal-area budget so that inserting
+// fill can never push a density window past max_density.  Windows overlap when
+// step < window, so one shape is charged to every window it touches and is
+// rejected unless *all* of them can absorb it.
+//
+// The windows and their starting metal area come from DensityCheck -- the same
+// measurement the check_metal_density signoff uses -- so a window the budget
+// believes is at 0.40 is a window signoff will also measure at 0.40.  Areas are
+// um^2 to match that core.
+class DensityBudget
+{
+ public:
+  DensityBudget(std::vector<Rect> windows,
+                std::vector<double> used_um2,
+                std::vector<double> area_um2,
+                double max_density,
+                double dbu_per_um)
+      : windows_(std::move(windows)),
+        area_um2_(std::move(area_um2)),
+        used_um2_(std::move(used_um2)),
+        max_density_(max_density),
+        dbu2_per_um2_(dbu_per_um * dbu_per_um)
+  {
+  }
+
+  // Charge `r` only if every window it touches stays within max_density.
+  bool tryCharge(const Rect& r)
+  {
+    std::vector<std::pair<size_t, double>> pending;
+    bool ok = true;
+    forEachOverlap(r, [&](size_t i, double overlap_um2) {
+      const double limit = max_density_ * area_um2_[i];
+      if (used_um2_[i] + overlap_um2 > limit) {
+        ok = false;
+        return false;
+      }
+      pending.emplace_back(i, overlap_um2);
+      return true;
+    });
+    if (!ok) {
+      return false;
+    }
+    for (auto& [i, overlap_um2] : pending) {
+      used_um2_[i] += overlap_um2;
+    }
+    return true;
+  }
+
+ private:
+  // Calls fn(window_index, overlap_um2) for each window `r` intersects;
+  // stops early if fn returns false.
+  template <typename Fn>
+  void forEachOverlap(const Rect& r, Fn fn)
+  {
+    for (size_t i = 0; i < windows_.size(); ++i) {
+      const Rect& w = windows_[i];
+      const int lx = std::max(w.xMin(), r.xMin());
+      const int ly = std::max(w.yMin(), r.yMin());
+      const int ux = std::min(w.xMax(), r.xMax());
+      const int uy = std::min(w.yMax(), r.yMax());
+      if (lx >= ux || ly >= uy) {
+        continue;
+      }
+      const double overlap_um2
+          = (static_cast<double>(ux - lx) * static_cast<double>(uy - ly))
+            / dbu2_per_um2_;
+      if (!fn(i, overlap_um2)) {
+        return;
+      }
+    }
+  }
+
+  std::vector<Rect> windows_;
+  std::vector<double> area_um2_;
+  std::vector<double> used_um2_;
+  double max_density_;
+  double dbu2_per_um2_;
+};
+
 static std::pair<int, int> getSpacing(dbTechLayer* layer,
                                       const DensityFillShapesConfig& cfg)
 {
@@ -344,7 +478,8 @@ static void fillPolygon(const Polygon90& area,
                         int num_masks,
                         bool needs_opc,
                         Graphics* graphics,
-                        Polygon90Set* filled_area = nullptr)
+                        Polygon90Set* filled_area = nullptr,
+                        DensityBudget* budget = nullptr)
 {
   // Convert the area polygon to a polygon set as we will remove areas
   // filled by one fill shape from consideration by future shapes,
@@ -424,6 +559,10 @@ static void fillPolygon(const Polygon90& area,
         auto y_lo = yl(f);
         auto x_hi = xh(f);
         auto y_hi = yh(f);
+        // Skip shapes that would drive a density window over max_density.
+        if (budget && !budget->tryCharge(Rect(x_lo, y_lo, x_hi, y_hi))) {
+          continue;
+        }
         dbFill::create(block, needs_opc, mask, layer, x_lo, y_lo, x_hi, y_hi);
         if (filled_area) {
           *filled_area += makeRect(x_lo, y_lo, x_hi, y_hi);
@@ -438,7 +577,10 @@ static void fillPolygon(const Polygon90& area,
 // Fill the given layer
 void DensityFill::fillLayer(dbBlock* block,
                             dbTechLayer* layer,
-                            const odb::Rect& fill_bounds_rect)
+                            const odb::Rect& fill_bounds_rect,
+                            const DensityTarget& target,
+                            const CouplingRelief& coupling,
+                            const DensityCheckResult& measured)
 {
   logger_->info(FIN, 3, "Filling layer {}.", layer->getConstName());
 
@@ -451,11 +593,111 @@ void DensityFill::fillLayer(dbBlock* block,
 
   const DensityFillLayerConfig& cfg = layers_[layer];
 
+  // Density-driven fill.  The windows and their current metal content come
+  // from DensityCheck via `measured` -- the same measurement the
+  // check_metal_density signoff runs -- so the windows this fill decides to
+  // top up are exactly the windows signoff will later judge.
+  //
+  // Each bound is honoured only if the caller actually supplied it.  With no
+  // min there is no notion of "short", so every fillable window stays in play;
+  // with no max there is no budget.  Substituting a bound here would be the
+  // same fail-safe leak the check guards against, one layer up.
+  std::unique_ptr<DensityBudget> budget;
+  Polygon90Set deficient_windows;
+  const bool restrict_to_deficient = target.enabled && target.hasMin();
+  if (target.enabled) {
+    const double dbu = layer->getTech()->getDbUnitsPerMicron();
+    const std::string layer_name = layer->getName();
+
+    std::vector<Rect> budget_windows;
+    std::vector<double> used_um2;
+    std::vector<double> area_um2;
+    int deficient = 0;
+    int total = 0;
+    for (const auto& w : measured.windows) {
+      if (w.layer != layer_name) {
+        continue;  // the measurement covers every routing layer at once
+      }
+      ++total;
+      // Window bounds come back in microns; convert with rounding so the DBU
+      // rect is bit-identical to the one the measurement clipped against.
+      const Rect bounds(static_cast<int>(std::lround(w.x0 * dbu)),
+                        static_cast<int>(std::lround(w.y0 * dbu)),
+                        static_cast<int>(std::lround(w.x1 * dbu)),
+                        static_cast<int>(std::lround(w.y1 * dbu)));
+      budget_windows.push_back(bounds);
+      used_um2.push_back(w.filled_area_um2);
+      area_um2.push_back(w.window_area_um2);
+      if (restrict_to_deficient && w.density < target.min_density) {
+        ++deficient;
+        deficient_windows += makeRect(
+            bounds.xMin(), bounds.yMin(), bounds.xMax(), bounds.yMax());
+      }
+    }
+
+    if (restrict_to_deficient) {
+      logger_->info(FIN,
+                    47,
+                    "Layer {}: {} of {} density windows below min_density "
+                    "{:.4f}.",
+                    layer->getConstName(),
+                    deficient,
+                    total,
+                    target.min_density);
+      if (deficient == 0) {
+        return;  // nothing on this layer is short
+      }
+    } else {
+      logger_->info(FIN,
+                    50,
+                    "Layer {}: {} density windows, no min_density supplied so "
+                    "every fillable window is in play.",
+                    layer->getConstName(),
+                    total);
+    }
+
+    if (target.hasMax()) {
+      budget = std::make_unique<DensityBudget>(std::move(budget_windows),
+                                               std::move(used_um2),
+                                               std::move(area_um2),
+                                               target.max_density,
+                                               dbu);
+    }
+  }
+
+  // Coupling relief: hold fill an extra distance away from timing-critical
+  // nets so that filling cannot load them with sidewall capacitance.
+  Polygon90Set critical_keepout;
+  bool has_critical_keepout = false;
+  if (!coupling.nets.empty() && coupling.halo > 0) {
+    critical_keepout = orNets(block, layer, coupling.nets);
+    if (!critical_keepout.empty()) {
+      has_critical_keepout = true;
+      critical_keepout = critical_keepout + coupling.halo;
+      logger_->info(FIN,
+                    48,
+                    "Layer {}: holding fill {} DBU away from {} critical "
+                    "nets.",
+                    layer->getConstName(),
+                    coupling.halo,
+                    coupling.nets.size());
+    }
+  }
+
   std::vector<Polygon90> polygons;
 
   // Do non-OPC fill
   Polygon90Set fill_area
       = fill_bounds - (non_fill + cfg.non_opc.space_to_non_fill);
+
+  if (has_critical_keepout) {
+    fill_area -= critical_keepout;
+  }
+
+  // Restrict fill to the windows that actually need it.
+  if (restrict_to_deficient) {
+    fill_area = fill_area & deficient_windows;
+  }
 
   if (graphics_) {
     graphics_->status("Non-OPC Area");
@@ -476,7 +718,8 @@ void DensityFill::fillLayer(dbBlock* block,
                 cfg.num_masks,
                 false,
                 graphics_.get(),
-                &non_opc_fill_area);
+                &non_opc_fill_area,
+                budget.get());
   }
   logger_->info(FIN, 4, "Total fills: {}.", block->getFills().size());
 
@@ -487,6 +730,12 @@ void DensityFill::fillLayer(dbBlock* block,
   Polygon90Set opc_fill_area
       = fill_bounds - (non_fill + cfg.opc.space_to_non_fill)
         - (non_opc_fill_area + cfg.non_opc.space_to_fill);
+  if (restrict_to_deficient) {
+    opc_fill_area = opc_fill_area & deficient_windows;
+  }
+  if (has_critical_keepout) {
+    opc_fill_area -= critical_keepout;
+  }
 
   if (graphics_) {
     graphics_->status("OPC Area");
@@ -499,8 +748,15 @@ void DensityFill::fillLayer(dbBlock* block,
   opc_fill_area.get(polygons);
   logger_->info(FIN, 5, "Filling {} areas with OPC fill.", polygons.size());
   for (auto& polygon : polygons) {
-    fillPolygon(
-        polygon, layer, block, cfg.opc, cfg.num_masks, true, graphics_.get());
+    fillPolygon(polygon,
+                layer,
+                block,
+                cfg.opc,
+                cfg.num_masks,
+                true,
+                graphics_.get(),
+                nullptr,
+                budget.get());
   }
 
   logger_->info(FIN, 6, "Total fills: {}.", block->getFills().size());
@@ -512,7 +768,10 @@ void DensityFill::fillLayer(dbBlock* block,
 }
 
 // Fill the design according to the given cfg file
-void DensityFill::fill(const char* cfg_filename, const odb::Rect& fill_area)
+void DensityFill::fill(const char* cfg_filename,
+                       const odb::Rect& fill_area,
+                       const DensityTarget& target,
+                       const CouplingRelief& coupling)
 {
   dbTech* tech = db_->getTech();
   loadConfig(cfg_filename, tech);
@@ -520,13 +779,64 @@ void DensityFill::fill(const char* cfg_filename, const odb::Rect& fill_area)
   dbChip* chip = db_->getChip();
   dbBlock* block = chip->getBlock();
 
+  // Measure once, for every routing layer, through the SAME core the
+  // check_metal_density signoff uses.  Giving the layer a min band makes the
+  // engine classify each window for us, so "which windows are short?" is
+  // answered by the signoff rule rather than by a second opinion living here.
+  DensityCheckResult measured;
+  if (target.enabled) {
+    // Hand the engine only the bounds the caller actually supplied; a bound
+    // left at -1 stays "no bound" all the way down.  The per-window densities
+    // come back either way, so an unlimited window is still measured.
+    DensityLimits limits;
+    limits.default_min = target.min_density;
+    limits.default_max = target.max_density;
+
+    // State the geometry this fill used.  The check prints the same line, so a
+    // caller who passes different numbers to the two commands can SEE the
+    // mismatch instead of getting a design that fill considers done and
+    // signoff measures over other windows.
+    const double dbu = tech->getDbUnitsPerMicron();
+    logger_->info(FIN,
+                  51,
+                  "Density-driven fill window / step: {:.4f} / {:.4f} um.",
+                  target.window / dbu,
+                  (target.step > 0 ? target.step : target.window) / dbu);
+
+    DensityCheck checker(db_, logger_);
+    measured = checker.check(
+        fill_area, target.window, target.step, limits, /* report_file */ "");
+
+    // Record the geometry so check_metal_density can warn if it is later run
+    // over different windows than the fill was driven by.
+    if (auto* prop = odb::dbIntProperty::find(block, "fin_density_window")) {
+      odb::dbProperty::destroy(prop);
+    }
+    if (auto* prop = odb::dbIntProperty::find(block, "fin_density_step")) {
+      odb::dbProperty::destroy(prop);
+    }
+    if (auto* prop = odb::dbIntProperty::find(block, "fin_density_max_ppm")) {
+      odb::dbProperty::destroy(prop);
+    }
+    odb::dbIntProperty::create(block, "fin_density_window", target.window);
+    odb::dbIntProperty::create(
+        block, "fin_density_step", target.step > 0 ? target.step : target.window);
+    // Whether a cap was ENFORCED on this grid, in parts per million so it fits
+    // an int property; -1 when no max was supplied.  check_metal_density needs
+    // this to tell an independent measurement from a self-confirming one.
+    odb::dbIntProperty::create(
+        block,
+        "fin_density_max_ppm",
+        target.hasMax() ? static_cast<int>(target.max_density * 1e6) : -1);
+  }
+
   for (dbTechLayer* layer : tech->getLayers()) {
     auto it = layers_.find(layer);
     if (it == layers_.end()) {
       logger_->warn(FIN, 10, "Skipping layer {}.", layer->getConstName());
       continue;
     }
-    fillLayer(block, layer, fill_area);
+    fillLayer(block, layer, fill_area, target, coupling, measured);
   }
 }
 

@@ -1,0 +1,48 @@
+[INFO ODB-0227] LEF file: sky130hd/sky130hd.tlef, created 13 layers, 25 vias
+[INFO ODB-0128] Design: coupling_fill
+[INFO ODB-0132]     Created 2 special nets and 0 connections.
+[WARNING FIN-0010] Skipping layer nwell.
+[WARNING FIN-0010] Skipping layer pwell.
+[WARNING FIN-0010] Skipping layer li1.
+[WARNING FIN-0010] Skipping layer mcon.
+[INFO FIN-0003] Filling layer met1.
+[INFO FIN-0009] Filling 2 areas with non-OPC fill.
+[INFO FIN-0004] Total fills: 3784.
+[WARNING FIN-0010] Skipping layer via.
+[WARNING FIN-0010] Skipping layer met2.
+[WARNING FIN-0010] Skipping layer via2.
+[WARNING FIN-0010] Skipping layer met3.
+[WARNING FIN-0010] Skipping layer via3.
+[WARNING FIN-0010] Skipping layer met4.
+[WARNING FIN-0010] Skipping layer via4.
+[WARNING FIN-0010] Skipping layer met5.
+no-relief met1 fills 3784 min gap to crit 3000
+PASS unrelieved fill intrudes into the halo (gap 3000 < 5000)
+--- halo band with NO relief: expect 54 = every window, met1 included ---
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.388875 (layer met1)
+Under-density       : 45
+Over-density        : 9
+Violations          : 54
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 54 window(s) outside the per-layer density band (45 under, 9 over).
+band_viol 54
+########## Metal density check ##########
+Window / step       : 12.0000 / 12.0000 um
+Windows measured    : 54
+With density band   : 54
+No band (skipped)   : 0
+Lowest density      : 0.000000 (layer li1)
+Highest density     : 0.388875 (layer met1)
+Under-density       : 45
+Over-density        : 9
+Violations          : 54
+Verdict             : FAIL
+########################################
+[WARNING FIN-0022] Metal density check FAILED: 54 window(s) outside the per-layer density band (45 under, 9 over).
