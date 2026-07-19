@@ -1817,6 +1817,88 @@ void FlexGCWorker::Impl::checkMetalShape_lef58MinStep_minAdjLength(
   }
 }
 
+// LEF58_MINSTEP ... MAXEDGES maxEdges : a run of more than maxEdges
+// consecutive polygon edges each shorter than minStepLength is a violation.
+// This mirrors the counting done by the legacy frMinStepConstraint checker
+// (checkMetalShape_minStep_helper) but is driven by the LEF58 constraint, so
+// advanced-node MAXEDGES rules (previously dropped at parse time and never
+// enforced) are now honored by the detailed router's DRC engine.
+void FlexGCWorker::Impl::checkMetalShape_lef58MinStep_maxEdges(
+    gcPin* pin,
+    frLef58MinStepConstraint* con)
+{
+  auto poly = pin->getPolygon();
+  auto layerNum = poly->getLayerNum();
+  auto net = poly->getNet();
+  if (poly->size() == 4 && con->isExceptRectangle()) {
+    return;
+  }
+  const auto minStepLength = con->getMinStepLength();
+  const auto maxEdges = con->getMaxEdges();
+  for (auto& edges : pin->getPolygonEdges()) {
+    // anchor on the first edge that is not itself a min-step edge so runs are
+    // counted between long edges around the (cyclic) ring
+    gcSegment* firste = nullptr;
+    for (auto& e : edges) {
+      if (gtl::length(*e) >= minStepLength) {
+        firste = e.get();
+        break;
+      }
+    }
+    // whole ring is short edges: no long anchor to bound a run, skip
+    if (!firste) {
+      continue;
+    }
+    auto edge = firste;
+    auto be = edge;
+    int currEdges = 0;
+    bool hasRoute = false;
+    frCoord llx = edge->high().x();
+    frCoord lly = edge->high().y();
+    frCoord urx = edge->high().x();
+    frCoord ury = edge->high().y();
+    while (true) {
+      edge = edge->getNextEdge();
+      if (gtl::length(*edge) < minStepLength) {
+        currEdges++;
+        hasRoute = hasRoute || (!edge->isFixed());
+        llx = std::min(llx, edge->high().x());
+        lly = std::min(lly, edge->high().y());
+        urx = std::max(urx, edge->high().x());
+        ury = std::max(ury, edge->high().y());
+      } else {
+        // begin and end of a run found; check it
+        if (edge != be && currEdges > maxEdges && hasRoute) {
+          odb::Rect markerBox(llx, lly, urx, ury);
+          auto marker = std::make_unique<frMarker>();
+          marker->setBBox(markerBox);
+          marker->setLayerNum(layerNum);
+          marker->setConstraint(con);
+          marker->addSrc(net->getOwner());
+          marker->addVictim(net->getOwner(),
+                            std::make_tuple(layerNum, markerBox, false));
+          marker->addAggressor(net->getOwner(),
+                               std::make_tuple(layerNum, markerBox, false));
+          addMarker(std::move(marker));
+        }
+        if (edge == be) {
+          break;
+        }
+        be = edge;  // new begin edge
+        if (be == firste) {
+          break;  // full loop completed
+        }
+        currEdges = 0;
+        hasRoute = false;
+        llx = edge->high().x();
+        lly = edge->high().y();
+        urx = edge->high().x();
+        ury = edge->high().y();
+      }
+    }
+  }
+}
+
 // currently only support nobetweeneol
 void FlexGCWorker::Impl::checkMetalShape_lef58MinStep(gcPin* pin)
 {
@@ -1830,6 +1912,11 @@ void FlexGCWorker::Impl::checkMetalShape_lef58MinStep(gcPin* pin)
     }
     if (con->hasMinAdjacentLength()) {
       checkMetalShape_lef58MinStep_minAdjLength(pin, con);
+    }
+    // plain MAXEDGES rule (no EOL / MINADJACENTLENGTH refinement)
+    if (con->hasMaxEdges() && !con->hasEolWidth()
+        && !con->hasMinAdjacentLength()) {
+      checkMetalShape_lef58MinStep_maxEdges(pin, con);
     }
   }
 }
