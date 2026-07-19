@@ -12,6 +12,7 @@
 #include "odb/db.h"
 #include "odb/dbBlockCallBackObj.h"
 #include "psm/em_signoff.h"
+#include "psm/signal_em.h"
 
 namespace odb {
 class dbDatabase;
@@ -123,6 +124,22 @@ class PDNSim : public odb::dbBlockCallBackObj
                                       double default_limit,
                                       const std::string& limits_file,
                                       const std::string& report_file);
+  // Signal-net EM (EM4): flag every routed SIGNAL segment whose switching
+  // current density exceeds a per-layer limit.  Unlike the power-grid check
+  // above there is no grid solve: the current is AC and bidirectional, and is
+  // formed from this design's real load capacitance and transition time (from
+  // OpenSTA) plus a switching activity, per the model in psm/signal_em.h.
+  // avg/rms/peak_limit supply the uniform per-family J-limits [A/um^2]; the
+  // limits_file (when non-empty) is parsed as "<layer> <avg|rms|peak> <A_um2>".
+  SignalEMResult checkSignalEM(sta::Scene* corner,
+                               double supply_voltage,
+                               double toggle_rate,
+                               const std::string& activity_file,
+                               double avg_limit,
+                               double rms_limit,
+                               double peak_limit,
+                               const std::string& limits_file,
+                               const std::string& report_file);
   void writeSpiceNetwork(odb::dbNet* net,
                          sta::Scene* corner,
                          GeneratedSourceType source_type,
