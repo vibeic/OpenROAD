@@ -176,6 +176,12 @@ class PDNSim : public odb::dbBlockCallBackObj
                          odb::dbTechLayer* layer,
                          IRDropByPoint& ir_drop) const;
 
+  // Worst (largest) static IR drop [V] measured across every routing layer of
+  // `net` by the most recent analyze_power_grid solve.  Returns 0.0 when the
+  // net has not been solved.  This is the single measured droop number the
+  // analysis-driven sizing engine (pdn_sizing.h) is calibrated against.
+  double getWorstIRDrop(odb::dbNet* net) const;
+
   // Functions of decap cells
   void addDecapMaster(odb::dbMaster* decap_master, double decap_cap);
   void insertDecapCells(double target, const char* net_name);

@@ -653,6 +653,30 @@ void PDNSim::getIRDropForLayer(odb::dbNet* net,
   ir_drop = find_solver->second->getIRDrop(layer, corner);
 }
 
+double PDNSim::getWorstIRDrop(odb::dbNet* net) const
+{
+  auto find_solver = solvers_.find(net);
+  if (last_corner_ == nullptr || find_solver == solvers_.end()) {
+    return 0.0;
+  }
+
+  // The worst static IR drop is the largest drop seen on any routing layer.
+  // Iterate the whole routing stack rather than a single layer so the number
+  // matches the "Worst static IR drop" the solver reports.
+  double worst = 0.0;
+  odb::dbTech* tech = db_->getTech();
+  for (odb::dbTechLayer* layer : tech->getLayers()) {
+    if (layer->getType() != odb::dbTechLayerType::ROUTING) {
+      continue;
+    }
+    IRDropByPoint ir_drop = find_solver->second->getIRDrop(layer, last_corner_);
+    for (const auto& [point, drop] : ir_drop) {
+      worst = std::max(worst, drop);
+    }
+  }
+  return worst;
+}
+
 void PDNSim::setGeneratedSourceSettings(const GeneratedSourceSettings& settings)
 {
   if (settings.bump_dx > 0) {

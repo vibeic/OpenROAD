@@ -490,6 +490,138 @@ proc set_pdnsim_source_settings { args } {
   psm::set_source_settings $dx $dy $size $interval $track_pitch $resistance
 }
 
+sta::define_cmd_args "size_pdn_for_droop" {
+  -net net_name
+  -target_droop droop
+  -current_width width
+  [-irreducible_droop droop]
+  [-min_width width]
+  [-max_width width]
+}
+
+# Analysis-driven strap sizing.  Reads the worst static IR drop the most recent
+# analyze_power_grid measured on -net, and reports the strap width that would
+# hold the droop to -target_droop given the irreducible package/bump floor.
+# This is ADVISORY: it computes the required geometry from the real measured
+# droop, it does not regenerate the grid.
+proc size_pdn_for_droop { args } {
+  sta::parse_key_args "size_pdn_for_droop" args \
+    keys {-net -target_droop -current_width -irreducible_droop \
+      -min_width -max_width} flags {}
+
+  if { ![info exists keys(-net)] } {
+    utl::error PSM 190 "Argument -net not specified."
+  }
+  if { ![info exists keys(-target_droop)] } {
+    utl::error PSM 191 "Argument -target_droop not specified."
+  }
+  if { ![info exists keys(-current_width)] } {
+    utl::error PSM 192 "Argument -current_width not specified."
+  }
+
+  set net [psm::find_net $keys(-net)]
+  set target [sta::voltage_ui_sta $keys(-target_droop)]
+  set cur_w [sta::distance_ui_sta $keys(-current_width)]
+
+  set irr 0.0
+  if { [info exists keys(-irreducible_droop)] } {
+    set irr [sta::voltage_ui_sta $keys(-irreducible_droop)]
+  }
+  set min_w 0.0
+  if { [info exists keys(-min_width)] } {
+    set min_w [sta::distance_ui_sta $keys(-min_width)]
+  }
+  set max_w 1.0e6
+  if { [info exists keys(-max_width)] } {
+    set max_w [sta::distance_ui_sta $keys(-max_width)]
+  }
+
+  set measured [psm::get_worst_ir_drop_cmd $net]
+  if { $measured <= 0.0 } {
+    utl::error PSM 193 "No IR drop data for net [$net getName]. Run\
+      analyze_power_grid before size_pdn_for_droop."
+  }
+
+  set req_w [psm::size_pdn_required_width_cmd \
+    $measured $cur_w $irr $target $min_w $max_w]
+  set ach [psm::size_pdn_achieved_droop_cmd \
+    $measured $cur_w $irr $target $min_w $max_w]
+
+  utl::report [format "Measured worst droop  : %.3e V" $measured]
+  utl::report [format "Target droop          : %.3e V" $target]
+  utl::report [format "Irreducible floor     : %.3e V" $irr]
+  utl::report [format "Current strap width   : %.3e m" $cur_w]
+
+  if { $req_w > $max_w } {
+    # req_w is +Inf (below the package floor) or exceeds the width window.
+    utl::report "Sizing verdict        : INFEASIBLE"
+    if { $target <= $irr } {
+      utl::report "Reason                : target at or below the irreducible\
+        package/bump floor; on-die widening cannot meet it"
+    } else {
+      utl::report [format "Reason                : required width %.3e m\
+        exceeds max width %.3e m" $req_w $max_w]
+    }
+    return
+  }
+
+  utl::report [format "Required strap width  : %.3e m" $req_w]
+  utl::report [format "Predicted droop       : %.3e V" $ach]
+  utl::report "Sizing verdict        : FEASIBLE"
+}
+
+sta::define_cmd_args "size_decap_for_droop" {
+  -peak_current current
+  -event_duration time
+  -resistance res
+  -target_droop droop
+}
+# NOTE: all four values are in the active OpenROAD UI units (current, time,
+# resistance, voltage), the same convention every other PSM/STA command uses.
+
+# Droop-driven decap sizing.  Reports the decoupling capacitance that holds a
+# switching event's droop to -target_droop, together with the conservative
+# charge bound.  Advisory: reports the required capacitance, does not place it.
+proc size_decap_for_droop { args } {
+  sta::parse_key_args "size_decap_for_droop" args \
+    keys {-peak_current -event_duration -resistance -target_droop} flags {}
+
+  foreach k {-peak_current -event_duration -resistance -target_droop} {
+    if { ![info exists keys($k)] } {
+      utl::error PSM 194 "Argument $k not specified."
+    }
+  }
+
+  set i [sta::current_ui_sta $keys(-peak_current)]
+  set t [sta::time_ui_sta $keys(-event_duration)]
+  set r [sta::resistance_ui_sta $keys(-resistance)]
+  set d [sta::voltage_ui_sta $keys(-target_droop)]
+
+  set cap [psm::size_decap_required_cap_cmd $i $t $r $d]
+  set bound [psm::decap_charge_bound_cmd $i $t $d]
+  set dc [expr { $i * $r }]
+
+  utl::report [format "Event current         : %.3e A" $i]
+  utl::report [format "Event duration        : %.3e s" $t]
+  utl::report [format "Effective resistance  : %.3e ohm" $r]
+  utl::report [format "DC droop (no decap)   : %.3e V" $dc]
+  utl::report [format "Target droop          : %.3e V" $d]
+
+  if { $d <= 0.0 } {
+    utl::report "Decap verdict         : INFEASIBLE (non-positive budget)"
+    return
+  }
+  if { $d >= $dc } {
+    utl::report "Required decap        : 0 F (DC droop already meets budget)"
+    utl::report "Decap verdict         : FEASIBLE"
+    return
+  }
+
+  utl::report [format "Required decap        : %.3e F" $cap]
+  utl::report [format "Charge bound (I*T/D)  : %.3e F" $bound]
+  utl::report "Decap verdict         : FEASIBLE"
+}
+
 namespace eval psm {
 proc find_net { net_name } {
   set net [[ord::get_db_block] findNet $net_name]
