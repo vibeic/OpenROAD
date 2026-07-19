@@ -261,13 +261,20 @@ void Opendp::detailedPlacement(const int max_displacement_x,
     negotiation.commitNegotiationPosToDpl();
 
     if (negotiation.numViolations() > 0) {
-      logger_->warn(DPL,
-                    701,
-                    "NegotiationLegalizer did not fully converge. "
-                    "Violations remain: {}",
-                    negotiation.numViolations());
+      // Same contract as the diamond path's DPL-36 above: legalization that
+      // leaves real violations behind is a failure, not an informational
+      // note. numViolations() counts non-fixed cells that are still illegal,
+      // so returning success here would hand the caller a DEF with genuine
+      // overlaps. The metric is emitted before raising so it is still
+      // recorded, and callers that want to continue wrap the command in
+      // `catch` exactly as they do for DPL-36.
       logger_->metric("NL__no__converge__final_violations",
                       negotiation.numViolations());
+      logger_->error(DPL,
+                     701,
+                     "NegotiationLegalizer did not fully converge. "
+                     "Violations remain: {}",
+                     negotiation.numViolations());
     }
 
     findDisplacementStats();

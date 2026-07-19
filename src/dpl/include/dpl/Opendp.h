@@ -136,7 +136,13 @@ class Opendp
   int padLeft(odb::dbInst* inst) const;
   int padRight(odb::dbInst* inst) const;
 
-  void checkPlacement(bool verbose, const std::string& report_file_name = "");
+  // Returns the number of placement violations found. With no_abort=false
+  // (the default) a non-zero count raises DPL-33, so a violation can never be
+  // reported as success; with no_abort=true the caller takes responsibility
+  // and MUST consult the returned count.
+  int checkPlacement(bool verbose,
+                     const std::string& report_file_name = "",
+                     bool no_abort = false);
   void fillerPlacement(const dbMasterSeq& filler_masters,
                        const char* prefix,
                        bool verbose);

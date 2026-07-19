@@ -162,12 +162,15 @@ remove_fillers
 ### Check Placement
 
 The `check_placement` command checks the placement legality. It returns
-`0` if the placement is legal.
+`0` if the placement is legal. If any violation is found it raises `DPL-33`,
+unless `-no_abort` is given, in which case it returns the violation count and
+the caller is responsible for acting on a non-zero result.
 
 ```tcl
 check_placement
     [-verbose]
     [-disallow_one_site_gaps]
+    [-no_abort]
     [-report_file_name filename]
 ```
 
@@ -177,6 +180,7 @@ check_placement
 | ----- | ----- |
 | `-verbose` | Enable verbose logging. |
 | `-disallow_one_site_gaps` | Option is deprecated. |
+| `-no_abort` | Report violations as a warning and return the violation count instead of raising `DPL-33`. Intended for repair flows that need to inspect and fix the placement; the returned count must be consulted, since the command no longer fails on its own. |
 | `-report_file_name` | File name for saving the report to (e.g. `report.json`.) |
 
 ### Optimize Mirroring
