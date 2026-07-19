@@ -5,6 +5,8 @@
 %{
 #include "ord/OpenRoad.hh"
 #include "psm/pdnsim.h"
+#include "psm/pdn_sizing.h"
+#include "psm/decap_opt.h"
 #include "sta/Scene.hh"
 
 namespace ord {
@@ -135,6 +137,55 @@ set_inst_power(odb::dbInst* inst, Scene* corner, float power)
 {
   PDNSim* pdnsim = getPDNSim();
   pdnsim->setInstPower(inst, corner, power);
+}
+
+// Worst measured static IR drop [V] on `net` from the last analyze_power_grid.
+double
+get_worst_ir_drop_cmd(odb::dbNet* net)
+{
+  PDNSim* pdnsim = getPDNSim();
+  return pdnsim->getWorstIRDrop(net);
+}
+
+// Analysis-driven strap sizing.  Given the droop PSM actually measured at the
+// current strap width and the irreducible package/bump floor, return the strap
+// width [m] that would meet the target droop.  Advisory: this computes the
+// required geometry, it does not mutate the grid.  Returns +Inf when the
+// target is at or below the package floor (unreachable by widening on-die
+// metal); the TCL wrapper compares the result against max_width to detect the
+// second infeasibility mode.  Each scalar of the PdnSizingResult is exposed by
+// its own accessor so the SWIG boundary stays a plain double.
+double
+size_pdn_required_width_cmd(double measured_droop, double current_width, double irreducible_droop, double target_droop, double min_width, double max_width)
+{
+  return psm::resizeFromMeasuredDroop(measured_droop, current_width, irreducible_droop, target_droop, min_width, max_width).required_width;
+}
+
+double
+size_pdn_achieved_droop_cmd(double measured_droop, double current_width, double irreducible_droop, double target_droop, double min_width, double max_width)
+{
+  return psm::resizeFromMeasuredDroop(measured_droop, current_width, irreducible_droop, target_droop, min_width, max_width).achieved_droop;
+}
+
+// Droop-driven decap sizing: the decoupling capacitance [F] that holds the
+// event droop to the target.  Returns 0 when the DC droop already fits, +Inf
+// when the budget is non-positive.
+double
+size_decap_required_cap_cmd(double peak_current, double event_duration, double effective_resistance, double target_droop)
+{
+  psm::DecapSizingSpec spec;
+  spec.peak_current = peak_current;
+  spec.event_duration = event_duration;
+  spec.effective_resistance = effective_resistance;
+  spec.allowed_droop = target_droop;
+  return psm::sizeDecapForDroop(spec).required_cap;
+}
+
+// Conservative R-free charge bound I*T/D [F] for the same event.
+double
+decap_charge_bound_cmd(double peak_current, double event_duration, double target_droop)
+{
+  return psm::chargeBoundDecap(peak_current, event_duration, target_droop);
 }
 
 %} // inline

@@ -1,0 +1,60 @@
+[INFO ODB-0227] LEF file: Nangate45/Nangate45.lef, created 22 layers, 27 vias, 135 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0130]     Created 54 pins.
+[INFO ODB-0131]     Created 624 components and 2752 component-terminals.
+[INFO ODB-0132]     Created 2 special nets and 1248 connections.
+[INFO ODB-0133]     Created 581 nets and 1504 connections.
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0015] Reading location of sources from: Vsrc_gcd_vdd.loc.
+########## IR report #################
+Net              : VDD
+Corner           : default
+Total power      : 1.38e-04 W
+Supply voltage   : 1.10e+00 V
+Worstcase voltage: 1.10e+00 V
+Average voltage  : 1.10e+00 V
+Average IR drop  : 3.13e-04 V
+Worstcase IR drop: 5.04e-04 V
+Percentage drop  : 0.05 %
+######################################
+### sizing: droop too high, must widen ###
+Measured worst droop  : 5.037e-04 V
+Target droop          : 2.500e-04 V
+Irreducible floor     : 1.000e-06 V
+Current strap width   : 2.000e-07 m
+Required strap width  : 4.038e-07 m
+Predicted droop       : 2.500e-04 V
+Sizing verdict        : FEASIBLE
+### sizing: target below package floor, must be infeasible ###
+Measured worst droop  : 5.037e-04 V
+Target droop          : 2.000e-04 V
+Irreducible floor     : 3.000e-04 V
+Current strap width   : 2.000e-07 m
+Sizing verdict        : INFEASIBLE
+Reason                : target at or below the irreducible package/bump floor; on-die widening cannot meet it
+### sizing: target already met, no widening ###
+Measured worst droop  : 5.037e-04 V
+Target droop          : 1.000e-03 V
+Irreducible floor     : 1.000e-06 V
+Current strap width   : 2.000e-07 m
+Required strap width  : 1.006e-07 m
+Predicted droop       : 1.000e-03 V
+Sizing verdict        : FEASIBLE
+### decap: budget below DC droop, finite decap ###
+Event current         : 4.000e-02 A
+Event duration        : 2.000e-10 s
+Effective resistance  : 2.000e+00 ohm
+DC droop (no decap)   : 8.000e-02 V
+Target droop          : 4.000e-02 V
+Required decap        : 1.443e-10 F
+Charge bound (I*T/D)  : 2.000e-10 F
+Decap verdict         : FEASIBLE
+### decap: budget above DC droop, none needed ###
+Event current         : 4.000e-02 A
+Event duration        : 2.000e-10 s
+Effective resistance  : 2.000e+00 ohm
+DC droop (no decap)   : 8.000e-02 V
+Target droop          : 1.000e-01 V
+Required decap        : 0 F (DC droop already meets budget)
+Decap verdict         : FEASIBLE

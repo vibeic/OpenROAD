@@ -43,7 +43,49 @@ gtest_discover_tests(TestEMSignoff
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# The analysis-driven PDN sizing engine (pdn_sizing.h) is header-only; the gate
+# additionally builds an independent Eigen ladder-network solve to check the
+# closed-form rail droop against, so it links Eigen but no OpenDB/OpenSTA.
+add_executable(TestPdnSizing TestPdnSizing.cpp)
+
+target_include_directories(TestPdnSizing
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+)
+
+target_link_libraries(TestPdnSizing
+  GTest::gtest
+  GTest::gtest_main
+  Eigen3::Eigen
+)
+
+gtest_discover_tests(TestPdnSizing
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# The droop-driven decap sizer (decap_opt.h) is cross-checked against the
+# transient MNA kernel, so this gate needs both include roots plus Eigen.
+add_executable(TestDecapOpt TestDecapOpt.cpp)
+
+target_include_directories(TestDecapOpt
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src
+)
+
+target_link_libraries(TestDecapOpt
+  GTest::gtest
+  GTest::gtest_main
+  Eigen3::Eigen
+)
+
+gtest_discover_tests(TestDecapOpt
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 add_dependencies(build_and_test
   TestTransientRC
   TestEMSignoff
+  TestPdnSizing
+  TestDecapOpt
 )
