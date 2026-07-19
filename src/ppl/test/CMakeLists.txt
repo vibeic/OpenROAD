@@ -124,5 +124,7 @@ or_integration_tests(
     write_pin_placement4
     write_pin_placement5
     write_pin_placement6
+  PASSFAIL_TESTS
+    io_net_weight
 )
 

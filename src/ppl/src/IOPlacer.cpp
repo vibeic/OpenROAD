@@ -1284,7 +1284,7 @@ int IOPlacer::assignGroupToSection(const std::vector<int>& io_group,
       for (int pin_idx : io_group) {
         IOPin& pin = net->getIoPin(pin_idx);
         bool has_mirrored_pin = pin.getBTerm()->hasMirroredBTerm();
-        int pin_hpwl = net->computeIONetHPWL(pin_idx, sections[i].pos);
+        int pin_hpwl = net->computeIONetCost(pin_idx, sections[i].pos);
         if (pin_hpwl == std::numeric_limits<int>::max()) {
           dst[i] = pin_hpwl;
           break;
@@ -1444,7 +1444,7 @@ bool IOPlacer::assignPinToSection(IOPin& io_pin,
     std::vector<int> used_slots(sections.size());
 
     for (int i = 0; i < sections.size(); i++) {
-      const int io_net_hpwl = netlist_->computeIONetHPWL(idx, sections[i].pos);
+      const int io_net_hpwl = netlist_->computeIONetCost(idx, sections[i].pos);
       const int mirrored_pin_cost = getMirroredPinCost(io_pin, sections[i].pos);
       dst[i] = io_net_hpwl + mirrored_pin_cost;
 
@@ -1485,7 +1485,7 @@ int IOPlacer::getMirroredPinCost(IOPin& io_pin, const odb::Point& position)
 {
   if (io_pin.getBTerm()->hasMirroredBTerm()) {
     odb::Point mirrored_pos = core_->getMirroredPosition(position);
-    return netlist_->computeIONetHPWL(io_pin.getMirrorPinIdx(), mirrored_pos);
+    return netlist_->computeIONetCost(io_pin.getMirrorPinIdx(), mirrored_pos);
   }
   return 0;
 }
@@ -3168,7 +3168,7 @@ void IOPlacer::initNetlist()
                              odb::Point(x, y));
     }
 
-    netlist_->addIONet(io_pin, inst_pins);
+    netlist_->addIONet(io_pin, inst_pins, net->getWeight());
     if (inst_pins.empty()) {
       zero_sink_ios_.push_back(io_pin);
     }

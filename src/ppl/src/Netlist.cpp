@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "odb/geom.h"
@@ -18,10 +20,12 @@ Netlist::Netlist()
 }
 
 void Netlist::addIONet(const IOPin& io_pin,
-                       const std::vector<InstancePin>& inst_pins)
+                       const std::vector<InstancePin>& inst_pins,
+                       int net_weight)
 {
   db_pin_idx_map_[io_pin.getBTerm()] = io_pins_.size();
   io_pins_.push_back(io_pin);
+  net_weights_.push_back(net_weight);
   inst_pins_.insert(inst_pins_.end(), inst_pins.begin(), inst_pins.end());
   net_pointer_.push_back(inst_pins_.size());
 }
@@ -122,6 +126,27 @@ int Netlist::computeIONetHPWL(int idx, const odb::Point& slot_pos)
   return (x + y);
 }
 
+// Assignment-objective cost: the geometric IO-net HPWL scaled by the net's
+// odb weight. A default-weight net (weight <= 1, and odb defaults every net to
+// 1) returns the unweighted HPWL byte-for-byte, so a design with no explicit
+// net weights assigns pins identically to stock; only a net explicitly
+// weighted >= 2 (e.g. a timing- or congestion-critical net) is biased toward a
+// slot with smaller HPWL. Kept separate from computeIONetHPWL(), which remains
+// the pure geometric HPWL used for reporting.
+int Netlist::computeIONetCost(int idx, const odb::Point& slot_pos)
+{
+  const int hpwl = computeIONetHPWL(idx, slot_pos);
+  const int weight = net_weights_[idx];
+  if (weight <= 1 || hpwl == std::numeric_limits<int>::max()) {
+    return hpwl;
+  }
+  const int64_t cost = static_cast<int64_t>(hpwl) * weight;
+  // Keep the cost inside int and clear of the Hungarian tie-break packing:
+  // values >= 2^24 skip the rank byte and INT_MAX is the fail sentinel.
+  constexpr int64_t kCostCap = std::numeric_limits<int>::max() / 2;
+  return static_cast<int>(std::min(cost, kCostCap));
+}
+
 int Netlist::computeDstIOtoPins(int idx, const odb::Point& slot_pos)
 {
   int net_start = net_pointer_[idx];
@@ -152,6 +177,7 @@ void Netlist::reset()
   inst_pins_.clear();
   net_pointer_.clear();
   io_pins_.clear();
+  net_weights_.clear();
   io_groups_.clear();
   db_pin_idx_map_.clear();
   net_pointer_.push_back(0);

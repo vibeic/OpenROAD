@@ -149,7 +149,9 @@ class Netlist
  public:
   Netlist();
 
-  void addIONet(const IOPin& io_pin, const std::vector<InstancePin>& inst_pins);
+  void addIONet(const IOPin& io_pin,
+                const std::vector<InstancePin>& inst_pins,
+                int net_weight = 1);
   int createIOGroup(const std::vector<odb::dbBTerm*>& pin_list,
                     bool order,
                     int group_idx);
@@ -168,6 +170,10 @@ class Netlist
   void getSinksOfIO(int idx, std::vector<InstancePin>& sinks);
 
   int computeIONetHPWL(int idx, const odb::Point& slot_pos);
+  // Assignment-objective cost: geometric HPWL scaled by the net's odb weight.
+  // Separate from computeIONetHPWL() so reporting stays the pure geometry.
+  int computeIONetCost(int idx, const odb::Point& slot_pos);
+  int getNetWeight(int idx) const { return net_weights_[idx]; }
   int computeDstIOtoPins(int idx, const odb::Point& slot_pos);
   void sortPinsFromGroup(int group_idx, Edge edge);
   odb::Rect getBB(int idx, const odb::Point& slot_pos);
@@ -177,6 +183,7 @@ class Netlist
   std::vector<InstancePin> inst_pins_;
   std::vector<int> net_pointer_;
   std::vector<IOPin> io_pins_;
+  std::vector<int> net_weights_;
   std::vector<PinGroupByIndex> io_groups_;
   odb::PtrMap<odb::dbBTerm, int> db_pin_idx_map_;
 };
