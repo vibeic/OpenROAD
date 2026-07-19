@@ -131,6 +131,36 @@ report_cts_metrics()
 }
 
 void
+report_cts_skew(bool verbose)
+{
+  getTritonCts()->reportClockSkew(verbose);
+}
+
+void
+report_cts_crpr(bool verbose)
+{
+  getTritonCts()->reportClockCrprCredit(verbose);
+}
+
+double
+cts_crpr_credit(const char* sink_pin1, const char* sink_pin2, const char* scene)
+{
+  return getTritonCts()->clockCrprCredit(sink_pin1, sink_pin2, scene);
+}
+
+double
+cts_clock_skew(const char* clock_net, const char* scene)
+{
+  return getTritonCts()->clockSkew(clock_net, scene);
+}
+
+double
+cts_clock_insertion_delay(const char* clock_net, const char* scene)
+{
+  return getTritonCts()->clockInsertionDelay(clock_net, scene);
+}
+
+void
 set_tree_buf(const char* buffer)
 {
   getTritonCts()->getParms()->setTreeBuffer(buffer);

@@ -1,0 +1,40 @@
+VERSION 5.7 ;
+DIVIDERCHAR "/" ;
+BUSBITCHARS "[]" ;
+DESIGN mmmc_skew ;
+UNITS DISTANCE MICRONS 2000 ;
+DIEAREA ( 0 0 ) ( 400000 200000 ) ;
+
+COMPONENTS 6 ;
+- buf1 CLKBUF_X1 + PLACED ( 100000 100000 ) N ;
+- ff1 DFF_X1 + PLACED ( 60000 100000 ) N ;
+- ff2 DFF_X1 + PLACED ( 60000 100000 ) N ;
+- buf2 CLKBUF_X1 + PLACED ( 100000 40000 ) N ;
+- ff3 DFF_X1 + PLACED ( 105000 40000 ) N ;
+- ff4 DFF_X1 + PLACED ( 190000 40000 ) N ;
+END COMPONENTS
+
+PINS 4 ;
+- clk1 + NET clk1 + DIRECTION INPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 100000 200000 ) S ;
+- clk2 + NET clk2 + DIRECTION INPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 100000 0 ) N ;
+- din + NET din + DIRECTION INPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 0 100000 ) E ;
+- dout + NET n_q4 + DIRECTION OUTPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 400000 40000 ) W ;
+END PINS
+
+NETS 9 ;
+- clk1 ( PIN clk1 ) ( buf1 A ) ;
+- n_c1 ( buf1 Z ) ( ff1 CK ) ( ff2 CK ) ;
+- clk2 ( PIN clk2 ) ( buf2 A ) ;
+- n_c2 ( buf2 Z ) ( ff3 CK ) ( ff4 CK ) ;
+- din ( PIN din ) ( ff1 D ) ;
+- n_q1 ( ff1 Q ) ( ff2 D ) ;
+- n_q2 ( ff2 Q ) ( ff3 D ) ;
+- n_q3 ( ff3 Q ) ( ff4 D ) ;
+- n_q4 ( ff4 Q ) ( PIN dout ) ;
+END NETS
+
+END DESIGN

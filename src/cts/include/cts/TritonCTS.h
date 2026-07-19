@@ -66,6 +66,14 @@ class TritonCTS
 
   void runTritonCts();
   void reportCtsMetrics();
+  // Post-CTS analysis of the clock tree in the db.
+  void reportClockSkew(bool verbose);
+  void reportClockCrprCredit(bool verbose);
+  double clockCrprCredit(const char* sinkPin1,
+                         const char* sinkPin2,
+                         const char* sceneName);
+  double clockSkew(const char* clockNetName, const char* sceneName);
+  double clockInsertionDelay(const char* clockNetName, const char* sceneName);
   CtsOptions* getParms() { return options_; }
   TechChar* getCharacterization() { return techChar_.get(); }
   odb::dbBlock* getBlock() { return db_->getChip()->getBlock(); }

@@ -1,0 +1,21 @@
+[INFO ODB-0227] LEF file: Nangate45/Nangate45.lef, created 22 layers, 27 vias, 135 library cells
+[INFO ODB-0128] Design: crpr_credit
+[INFO ODB-0130]     Created 3 pins.
+[INFO ODB-0131]     Created 7 components and 36 component-terminals.
+[INFO ODB-0133]     Created 8 nets and 17 connections.
+Clock net clk (4 sinks)
+  scene default sink pairs:
+    ff3/CK / ff4/CK share buf_b credit 0.0578 ns
+    ff3/CK / ff1/CK share root_buf credit 0.0272 ns
+    ff3/CK / ff2/CK share root_buf credit 0.0272 ns
+    ff4/CK / ff1/CK share root_buf credit 0.0272 ns
+    ff4/CK / ff2/CK share root_buf credit 0.0272 ns
+    ff1/CK / ff2/CK share buf_a credit 0.0578 ns
+  scene default: 6 sink pairs, common-path credit min 0.0272 ns, max 0.0578 ns, avg 0.0374 ns
+PASS ff1/CK/ff2/CK credit 0.0578 ns == arrival at buf_a/Z 0.0578 ns
+PASS ff3/CK/ff4/CK credit 0.0578 ns == arrival at buf_b/Z 0.0578 ns
+PASS ff1/CK/ff3/CK credit 0.0272 ns == arrival at root_buf/Z 0.0272 ns
+PASS ff2/CK/ff4/CK credit 0.0272 ns == arrival at root_buf/Z 0.0272 ns
+PASS cross-branch credit 0.0272 ns < same-branch credit 0.0578 ns
+[ERROR CTS-0250] ff1/CK and root_buf/A are not both sinks of one clock tree.
+PASS non-sink pin rejected

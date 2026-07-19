@@ -13,6 +13,8 @@ or_integration_tests(
     check_buffers
     check_buffers_blockages
     colocated_sinks
+    crpr_credit
+    mmmc_skew
     check_buffers_blockages_merge
     check_buffer_inference1
     check_buffer_inference2

@@ -29,6 +29,7 @@
 #include "Clock.h"
 #include "CtsOptions.h"
 #include "HTreeBuilder.h"
+#include "ClockTreeAnalysis.h"
 #include "LatencyBalancer.h"
 #include "TechChar.h"
 #include "TreeBuilder.h"
@@ -2600,6 +2601,39 @@ void TritonCTS::repairClockNets()
   if (max_wire_length > 0.0) {
     resizer_->repairClkNets(max_wire_length);
   }
+}
+
+void TritonCTS::reportClockSkew(bool verbose)
+{
+  ClockTreeAnalysis analysis(logger_, db_, network_, openSta_);
+  analysis.reportSkew(verbose);
+}
+
+void TritonCTS::reportClockCrprCredit(bool verbose)
+{
+  ClockTreeAnalysis analysis(logger_, db_, network_, openSta_);
+  analysis.reportCrprCredit(verbose);
+}
+
+double TritonCTS::clockCrprCredit(const char* sinkPin1,
+                                  const char* sinkPin2,
+                                  const char* sceneName)
+{
+  ClockTreeAnalysis analysis(logger_, db_, network_, openSta_);
+  return analysis.crprCreditBetween(sinkPin1, sinkPin2, sceneName);
+}
+
+double TritonCTS::clockSkew(const char* clockNetName, const char* sceneName)
+{
+  ClockTreeAnalysis analysis(logger_, db_, network_, openSta_);
+  return analysis.skewAtScene(clockNetName, sceneName);
+}
+
+double TritonCTS::clockInsertionDelay(const char* clockNetName,
+                                     const char* sceneName)
+{
+  ClockTreeAnalysis analysis(logger_, db_, network_, openSta_);
+  return analysis.insertionDelayAtScene(clockNetName, sceneName);
 }
 
 // Balance macro cell latencies with register latencies.

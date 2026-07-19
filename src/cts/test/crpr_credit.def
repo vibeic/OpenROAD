@@ -1,0 +1,38 @@
+VERSION 5.7 ;
+DIVIDERCHAR "/" ;
+BUSBITCHARS "[]" ;
+DESIGN crpr_credit ;
+UNITS DISTANCE MICRONS 2000 ;
+DIEAREA ( 0 0 ) ( 40000 40000 ) ;
+
+COMPONENTS 7 ;
+- root_buf CLKBUF_X1 + PLACED ( 20000 20000 ) N ;
+- buf_a CLKBUF_X1 + PLACED ( 10000 20000 ) N ;
+- buf_b CLKBUF_X1 + PLACED ( 30000 20000 ) N ;
+- ff1 DFF_X1 + PLACED ( 6000 20000 ) N ;
+- ff2 DFF_X1 + PLACED ( 14000 20000 ) N ;
+- ff3 DFF_X1 + PLACED ( 26000 20000 ) N ;
+- ff4 DFF_X1 + PLACED ( 34000 20000 ) N ;
+END COMPONENTS
+
+PINS 3 ;
+- clk + NET clk + DIRECTION INPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 20000 40000 ) S ;
+- din + NET din + DIRECTION INPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 0 20000 ) E ;
+- dout + NET n_q4 + DIRECTION OUTPUT + USE SIGNAL
+  + LAYER metal6 ( -140 0 ) ( 140 280 ) + FIXED ( 40000 20000 ) W ;
+END PINS
+
+NETS 8 ;
+- clk ( PIN clk ) ( root_buf A ) ;
+- n_root ( root_buf Z ) ( buf_a A ) ( buf_b A ) ;
+- n_a ( buf_a Z ) ( ff1 CK ) ( ff2 CK ) ;
+- n_b ( buf_b Z ) ( ff3 CK ) ( ff4 CK ) ;
+- din ( PIN din ) ( ff1 D ) ;
+- n_q1 ( ff1 Q ) ( ff2 D ) ( ff3 D ) ;
+- n_q3 ( ff3 Q ) ( ff4 D ) ;
+- n_q4 ( ff4 Q ) ( PIN dout ) ;
+END NETS
+
+END DESIGN

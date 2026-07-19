@@ -72,6 +72,11 @@ struct PlaceOptions
   bool disablePinDensityAdjust = false;
   bool enable_routing_congestion = false;
   bool virtualCtsMode = false;
+  // ECO mode: keep every already-PLACED instance at exactly the coordinates
+  // it came in with.  Plain -incremental only locks them for the first pass
+  // and then unlocks everything, so an ECO that adds three cells still comes
+  // back with the whole design moved.
+  bool freezePlaced = false;
   // Maximum clock insertion delay as a fraction of the clock period.
   // The MST leaf farthest from the virtual clock root gets this delay;
   // all others are scaled proportionally.  Default: 10% of the period.

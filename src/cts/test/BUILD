@@ -28,6 +28,8 @@ COMPULSORY_TESTS = [
     "check_wire_rc_cts",
     "clock_buffer_footprint",
     "colocated_sinks",
+    "crpr_credit",
+    "mmmc_skew",
     "dummy_load",
     "find_clock",
     "find_clock_pad",

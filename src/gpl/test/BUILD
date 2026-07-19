@@ -14,6 +14,8 @@ TESTS = [
     "convergence01",
     "core01",
     "density01",
+    "eco_freeze",
+    "eco_freeze_neg",
     "diverge01",
     "error01",
     "incremental01",
