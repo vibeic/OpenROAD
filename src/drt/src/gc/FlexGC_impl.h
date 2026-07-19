@@ -518,6 +518,8 @@ class FlexGCWorker::Impl
                                                  frLef58MinStepConstraint* con);
   void checkMetalShape_lef58MinStep_minAdjLength(gcPin* pin,
                                                  frLef58MinStepConstraint* con);
+  void checkMetalShape_lef58MinStep_maxEdges(gcPin* pin,
+                                             frLef58MinStepConstraint* con);
   void checkMetalSpacingTableInfluence();
   void checkPinMetSpcTblInf(gcPin*);
   void checkRectMetSpcTblInf(gcRect*, frSpacingTableInfluenceConstraint*);

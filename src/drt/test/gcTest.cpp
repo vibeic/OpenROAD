@@ -2,6 +2,7 @@
 // Copyright (c) 2020-2026, The OpenROAD Authors
 
 #include <cstdint>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <tuple>
@@ -542,6 +543,88 @@ TEST_F(GCFixture, min_step58_minadjlength)
              2,
              frConstraintTypeEnum::frcLef58MinStepConstraint,
              odb::Rect(0, 50, 250, 70));
+}
+
+// Count only LEF58_MINSTEP markers, isolating the feature under test from the
+// fixture's unavoidable min-width markers.  In this fixture minWidth(100) >
+// minStepLength(50), so ANY geometry with a real sub-minStep jog is also below
+// min-width somewhere and raises frcMinWidthConstraint markers -- those are an
+// artifact of the fixture, orthogonal to MAXEDGES.  We assert on the count of
+// frcLef58MinStepConstraint markers, which is exactly what this rule produces.
+static int countLef58MinStepMarkers(
+    const std::vector<std::unique_ptr<frMarker>>& markers)
+{
+  int n = 0;
+  for (auto& m : markers) {
+    if (m->getConstraint()->typeId()
+        == frConstraintTypeEnum::frcLef58MinStepConstraint) {
+      n++;
+    }
+  }
+  return n;
+}
+
+// A rectilinear staircase built from 5 overlapping 60x30 rects stepping
+// up-right.  Each seg is a width-30 horizontal wire -> a clean 60x30 rect (no
+// end extension with the default truncate style).  The union polygon has, on
+// each of its two staircase sides, a run of consecutive short edges (each 30
+// dbu < minStepLength=50) bounded by longer anchor edges -- a classic min-step
+// MAXEDGES violation shape.
+#define MAKE_STAIRCASE(n1)                        \
+  makePathseg(n1, 2, {0, 15}, {60, 15}, 30);      \
+  makePathseg(n1, 2, {30, 45}, {90, 45}, 30);     \
+  makePathseg(n1, 2, {60, 75}, {120, 75}, 30);    \
+  makePathseg(n1, 2, {90, 105}, {150, 105}, 30);  \
+  makePathseg(n1, 2, {120, 135}, {180, 135}, 30)
+
+// LEF58_MINSTEP MAXEDGES positive: the staircase has runs of consecutive short
+// edges longer than MAXEDGES=2, so the LEF58 min-step check fires.
+TEST_F(GCFixture, min_step58_maxedges_violation)
+{
+  auto con = makeMinStep58Constraint(2);
+  con->setMaxEdges(2);  // minStepLength defaults to 50
+
+  frNet* n1 = makeNet("n1");
+  MAKE_STAIRCASE(n1);
+
+  runGC();
+
+  const int n58 = countLef58MinStepMarkers(worker.getMarkers());
+  std::cerr << "LEF58MINSTEP_MARKERS_MAXEDGES2=" << n58 << std::endl;
+  EXPECT_GT(n58, 0);
+}
+
+// Proven negative on the SAME binary and SAME geometry: raising MAXEDGES above
+// the run length must silence the LEF58 min-step check.  Paired with the
+// positive above, this proves the checker actually COUNTS edges rather than
+// always firing.
+TEST_F(GCFixture, min_step58_maxedges_clean_threshold)
+{
+  auto con = makeMinStep58Constraint(2);
+  con->setMaxEdges(15);  // runs are shorter than 15 -> no LEF58 violation
+
+  frNet* n1 = makeNet("n1");
+  MAKE_STAIRCASE(n1);
+
+  runGC();
+
+  const int n58 = countLef58MinStepMarkers(worker.getMarkers());
+  std::cerr << "LEF58MINSTEP_MARKERS_MAXEDGES15=" << n58 << std::endl;
+  EXPECT_EQ(n58, 0);
+}
+
+// Control: a plain rectangle has no min-step edges, so MAXEDGES=2 stays quiet.
+TEST_F(GCFixture, min_step58_maxedges_rectangle_clean)
+{
+  auto con = makeMinStep58Constraint(2);
+  con->setMaxEdges(2);
+
+  frNet* n1 = makeNet("n1");
+  makePathseg(n1, 2, {0, 0}, {500, 0}, 100);  // 500x100 rectangle
+
+  runGC();
+
+  EXPECT_EQ(countLef58MinStepMarkers(worker.getMarkers()), 0);
 }
 
 // Check for a lef58 rect only violation.  The markers are

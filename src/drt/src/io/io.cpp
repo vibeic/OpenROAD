@@ -1667,13 +1667,6 @@ void io::Parser::setRoutingLayerProperties(odb::dbTechLayer* layer,
     router_cfg_->ALLOW_PIN_AS_FEEDTHROUGH = false;
   }
   for (auto rule : layer->getTechLayerMinStepRules()) {
-    if (rule->getMaxEdges() > 1) {
-      logger_->warn(DRT,
-                    335,
-                    "LEF58_MINSTEP MAXEDGES {}  is not supported",
-                    rule->getMaxEdges());
-      continue;
-    }
     auto con = std::make_unique<frLef58MinStepConstraint>();
     con->setMinStepLength(rule->getMinStepLength());
     con->setMaxEdges(rule->isMaxEdgesValid() ? rule->getMaxEdges() : -1);
