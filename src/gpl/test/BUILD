@@ -21,6 +21,8 @@ TESTS = [
     "incremental01",
     "mbff_hier",
     "mbff_orig_name",
+    "mbff_clock_power_off",
+    "mbff_clock_power_on",
     "nograd01",
     "simple01",
     "simple01-obs",
@@ -148,7 +150,7 @@ cc_test(
     srcs = ["fft_test.cc"],
     linkstatic = True,  # TODO: remove once deps define all symbols
     deps = [
-        "//src/gpl",
+        "//src/gpl",  # buildcleaner: keep: needs fixing gpl layering first.
         "//src/gpl:gpl_private_hdrs",
         "@googletest//:gtest",
         "@googletest//:gtest_main",

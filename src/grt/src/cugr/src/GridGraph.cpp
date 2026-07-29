@@ -55,12 +55,10 @@ GridGraph::GridGraph(const Design* design,
 
   layer_names_.resize(num_layers_);
   layer_directions_.resize(num_layers_);
-  layer_min_lengths_.resize(num_layers_);
   for (int layer_index = 0; layer_index < num_layers_; layer_index++) {
     const auto& layer = design->getLayer(layer_index);
     layer_names_[layer_index] = layer.getName();
     layer_directions_[layer_index] = layer.getDirection();
-    layer_min_lengths_[layer_index] = layer.getMinLength();
     // First non-zero sheet/via resistance is the res-aware cost reference.
     if (ref_resistance_ <= 0.0 && layer.getResistance() > 0.0) {
       ref_resistance_ = layer.getResistance();
@@ -295,6 +293,17 @@ GridGraph::GridGraph(const Design* design,
   }
 }
 
+CapacityT GridGraph::viaDemand(const int layer_index,
+                               const int l,
+                               const int edge_sum) const
+{
+  // Spread the layer's precomputed via demand length over its two edges.
+  const double via_num = (l == layer_index)
+                             ? design_->getViaDemandLengthLower(layer_index)
+                             : design_->getViaDemandLengthUpper(layer_index);
+  return edge_sum > 0 ? (CapacityT) via_num / edge_sum : (CapacityT) 0;
+}
+
 void GridGraph::computeCongestionInformation()
 {
   if (!congestion_info_dirty_) {
@@ -508,9 +517,8 @@ CostT GridGraph::getViaCost(const int layer_index,
 
     // Prevent division by zero
     if (lower_edge_length > 0 || higher_edge_length > 0) {
-      const CapacityT demand = (CapacityT) layer_min_lengths_[l]
-                               / (lower_edge_length + higher_edge_length)
-                               * constants_.via_multiplier;
+      const CapacityT demand
+          = viaDemand(layer_index, l, lower_edge_length + higher_edge_length);
       const double layer_factor
           = std::cmp_less(l, net_costs.size()) ? net_costs[l] : 1.0;
       if (lower_edge_length > 0) {
@@ -634,8 +642,6 @@ std::vector<AccessPoint> GridGraph::translateAccessPointsToGrid(
     const std::vector<odb::dbAccessPoint*>& aps,
     const odb::Point& inst_location) const
 {
-  const int amount_per_x = design_->getDieRegion().hx() / x_size_;
-  const int amount_per_y = design_->getDieRegion().hy() / y_size_;
   std::vector<AccessPoint> aps_on_grid;
   for (const auto& ap : aps) {
     odb::Point ap_position = ap->getPoint();
@@ -647,12 +653,16 @@ std::vector<AccessPoint> GridGraph::translateAccessPointsToGrid(
     xform.setOrient(odb::dbOrientType(odb::dbOrientType::R0));
     xform.apply(ap_position);
 
-    const int ap_x = (ap_position.getX() / amount_per_x >= x_size_)
-                         ? x_size_ - 1
-                         : ap_position.getX() / amount_per_x;
-    const int ap_y = ((ap_position.getY() / amount_per_y >= y_size_)
-                          ? y_size_ - 1
-                          : ap_position.getY() / amount_per_y);
+    // Map to the gcell containing the point with the same gridline search as
+    // every other dbu->gcell conversion (a fixed die/size pitch drifts off the
+    // real gridlines and lands boundary pins one gcell off). A point exactly
+    // on a gridline degenerates the interval; low() picks the upper cell.
+    const BoxT cells = rangeSearchCells(BoxT(ap_position.getX(),
+                                             ap_position.getY(),
+                                             ap_position.getX(),
+                                             ap_position.getY()));
+    const int ap_x = std::clamp(cells[0].low(), 0, x_size_ - 1);
+    const int ap_y = std::clamp(cells[1].low(), 0, y_size_ - 1);
     const PointT selected_point = PointT(ap_x, ap_y);
     const int num_layer
         = std::clamp(layer->getRoutingLevel() - 1, 0, getNumLayers() - 1);
@@ -699,7 +709,12 @@ bool GridGraph::findODBAccessPoints(
     access_points.clear();
     if (!aps_on_grid.empty()) {
       AccessPoint selected_ap = selectAccessPoint(aps_on_grid);
-      selected_access_points.emplace(selected_ap);
+      // Pins can share a gcell with APs on different layers; merge the fixed
+      // layer interval so the tree reaches every pin (like the shape path).
+      auto it = selected_access_points.emplace(selected_ap).first;
+      IntervalT& fixed_layer_interval = it->layers;
+      fixed_layer_interval.update(selected_ap.layers.low());
+      fixed_layer_interval.update(selected_ap.layers.high());
       net->addBTermAccessPoint(bterm, selected_ap);
       has_aps = true;
     }
@@ -725,7 +740,12 @@ bool GridGraph::findODBAccessPoints(
         = translateAccessPointsToGrid(access_points, odb::Point(x, y));
     if (!aps_on_grid.empty()) {
       AccessPoint selected_ap = selectAccessPoint(aps_on_grid);
-      selected_access_points.emplace(selected_ap);
+      // Pins can share a gcell with APs on different layers; merge the fixed
+      // layer interval so the tree reaches every pin (like the shape path).
+      auto it = selected_access_points.emplace(selected_ap).first;
+      IntervalT& fixed_layer_interval = it->layers;
+      fixed_layer_interval.update(selected_ap.layers.low());
+      fixed_layer_interval.update(selected_ap.layers.high());
       net->addITermAccessPoint(iterm, selected_ap);
       access_points.clear();
       has_aps = true;
@@ -870,9 +890,8 @@ void GridGraph::commitVia(const int layer_index,
 
     // Prevent division by zero
     if (lower_edge_length > 0 || higher_edge_length > 0) {
-      const CapacityT demand = (CapacityT) layer_min_lengths_[l]
-                               / (lower_edge_length + higher_edge_length)
-                               * constants_.via_multiplier;
+      const CapacityT demand
+          = viaDemand(layer_index, l, lower_edge_length + higher_edge_length);
       // Use the per-layer NDR factor for `l`, not a net-wide value.
       const double layer_factor
           = std::cmp_less(l, net_costs.size()) ? net_costs[l] : 1.0;
@@ -888,6 +907,34 @@ void GridGraph::commitVia(const int layer_index,
     total_num_vias_ -= 1;
   } else {
     total_num_vias_ += 1;
+  }
+}
+
+std::vector<std::vector<std::vector<CapacityT>>> GridGraph::snapshotDemand()
+    const
+{
+  std::vector<std::vector<std::vector<CapacityT>>> snap(graph_edges_.size());
+  for (size_t l = 0; l < graph_edges_.size(); l++) {
+    snap[l].resize(graph_edges_[l].size());
+    for (size_t x = 0; x < graph_edges_[l].size(); x++) {
+      snap[l][x].reserve(graph_edges_[l][x].size());
+      for (const GraphEdge& edge : graph_edges_[l][x]) {
+        snap[l][x].push_back(edge.demand);
+      }
+    }
+  }
+  return snap;
+}
+
+void GridGraph::restoreDemand(
+    const std::vector<std::vector<std::vector<CapacityT>>>& snap)
+{
+  for (size_t l = 0; l < graph_edges_.size(); l++) {
+    for (size_t x = 0; x < graph_edges_[l].size(); x++) {
+      for (size_t y = 0; y < graph_edges_[l][x].size(); y++) {
+        graph_edges_[l][x][y].demand = snap[l][x][y];
+      }
+    }
   }
 }
 

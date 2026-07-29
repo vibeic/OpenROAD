@@ -160,6 +160,9 @@ class Tapcell
                                       InstIndexableGetter>;
 
   std::vector<odb::dbBox*> findBlockages();
+  void checkPlaceable(odb::dbMaster* master, const std::string& option) const;
+  void checkPlaceable(const Options& options) const;
+  void checkPlaceable(const EndcapCellOptions& options) const;
   bool checkSymmetry(odb::dbMaster* master, const odb::dbOrientType& ori);
   odb::dbInst* makeInstance(odb::dbBlock* block,
                             odb::dbMaster* master,
@@ -217,6 +220,12 @@ class Tapcell
   int placeEndcapEdgeHorizontal(const Edge& edge,
                                 const CornerMap& corners,
                                 const EndcapCellOptions& options);
+  int fillEndcapEdge(odb::dbRow* row,
+                     int x_start,
+                     int x_end,
+                     const std::vector<odb::dbMaster*>& masters,
+                     EdgeType edge_type,
+                     const std::string& prefix);
   int placeEndcapEdgeVertical(const Edge& edge,
                               const CornerMap& corners,
                               const EndcapCellOptions& options);
@@ -238,9 +247,14 @@ class Tapcell
   std::string tap_prefix_;
   std::string endcap_prefix_;
   std::vector<Edge> filled_edges_;
+  // x-ranges already filled by horizontal endcap edges, per row.
+  odb::PtrMap<odb::dbRow, std::vector<std::pair<int, int>>>
+      filled_horizontal_edges_;
+  // corner cells placed so far, per row, persisted across areas/holes.
+  CornerMap placed_corners_;
 
-  // vibeic fork: -bound_to_placement. When set, tapcells are only placed whose
-  // center falls inside the placed-cell bounding box expanded by a latch-up halo.
+  // -bound_to_placement. When set, tapcells are only placed whose center falls
+  // inside the placed-cell bounding box expanded by a latch-up halo.
   void computePlacementBounds(const Options& options, int dist);
   std::optional<odb::Rect> tap_placement_bounds_;
 };

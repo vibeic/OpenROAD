@@ -268,6 +268,11 @@ class GridGraph
   void removeTreeUsage(const std::shared_ptr<GRTreeNode>& tree,
                        const std::vector<double>& net_costs = {});
 
+  // Debug: snapshot/restore per-edge demand for consistency checks.
+  std::vector<std::vector<std::vector<CapacityT>>> snapshotDemand() const;
+  void restoreDemand(
+      const std::vector<std::vector<std::vector<CapacityT>>>& snap);
+
   // Checks
   bool checkOverflow(int layer_index, int x, int y) const
   {
@@ -354,13 +359,14 @@ class GridGraph
   void commitTree(const std::shared_ptr<GRTreeNode>& tree,
                   bool rip_up = false,
                   const std::vector<double>& net_costs = {});
+  // Per-via demand on layer `l` of via `layer_index`, spread over `edge_sum`.
+  CapacityT viaDemand(int layer_index, int l, int edge_sum) const;
 
   utl::Logger* logger_;
   const std::vector<std::vector<int>> gridlines_;
   std::vector<std::vector<int>> grid_centers_;
   std::vector<std::string> layer_names_;
   std::vector<int> layer_directions_;
-  std::vector<int> layer_min_lengths_;
 
   const int lib_dbu_;
   const int m2_pitch_;

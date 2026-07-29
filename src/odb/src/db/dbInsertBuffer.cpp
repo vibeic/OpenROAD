@@ -277,13 +277,13 @@ dbInst* dbInsertBuffer::checkAndCreateBuffer()
   dbMTerm* input_mterm = nullptr;
   dbMTerm* output_mterm = nullptr;
   for (dbMTerm* mterm : const_cast<dbMaster*>(buffer_master_)->getMTerms()) {
-    // Defense-in-depth (vibeic): a POWER/GROUND pin declared DIRECTION INPUT
-    // (or omitted, which ODB defaults to INPUT) in a vendor LEF is
-    // electrically a supply, not a signal, and must never be counted as the
-    // buffer's I/O pin. Skip it so it cannot trip the ODB-1207/1208 pin-count
-    // reject that otherwise makes repair_design insert 0 buffers on a
-    // high-fanout net (leaving it unbuffered -> detailed-route shorts). A
-    // genuine signal pin has sigType SIGNAL/CLOCK and is unaffected.
+    // A POWER/GROUND pin declared DIRECTION INPUT (or omitted, which ODB
+    // defaults to INPUT) in a vendor LEF is electrically a supply, not a
+    // signal, and must never be counted as the buffer's I/O pin. Skip it so it
+    // cannot trip the ODB-1207/1208 pin-count reject that otherwise makes
+    // repair_design insert 0 buffers on a high-fanout net (leaving it
+    // unbuffered -> detailed-route shorts). A genuine signal pin has sigType
+    // SIGNAL/CLOCK and is unaffected. Upstream landed the identical guard.
     if (mterm->getSigType().isSupply()) {
       continue;
     }
@@ -549,9 +549,10 @@ std::string dbInsertBuffer::makeUniqueHierName(const dbModule* module,
                                                const char* suffix) const
 {
   // insertBuffer only punches scalar hierarchy ports, never bus ports.
-  std::string scalar_base_name = replaceBracketsWithUnderscores(base_name);
-  std::string name
-      = (suffix == nullptr) ? scalar_base_name : scalar_base_name + suffix;
+  std::string name = replaceBracketsWithUnderscores(base_name);
+  if (suffix != nullptr) {
+    name += suffix;
+  }
   std::string full = block_->makeNewNetName(
       module, name.c_str(), dbNameUniquifyType::IF_NEEDED_WITH_UNDERSCORE);
   return std::string(block_->getBaseName(full.c_str()));

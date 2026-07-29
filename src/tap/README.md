@@ -54,7 +54,7 @@ tapcell
 #### Options
 
 | Switch Name | Description |
-| ----- | ----- |
+| ---------------------- | -------------------------------------- |
 | `[-bound_to_placement]` | Restrict tapcell insertion to the placed-cell region (its bounding box expanded by `-placement_halo`), instead of tiling the whole die. Prevents flooding an otherwise-empty sparse die with well-taps over bare silicon. |
 | `[-placement_halo]` | Latch-up margin (in microns) added around the placed-cell region when `-bound_to_placement` is used. Defaults to twice the tapcell `-distance`. |
 | `[-cnrcap_nwin_master]` | Macro cell placed at the corners the core area according the row orientation. |
@@ -95,7 +95,7 @@ cut_rows
 #### Options
 
 | Switch Name | Description |
-| ----- | ----- |
+| --------------- | --------------------------------------------- |
 | `[-endcap_master]` | Master used as an endcap. |
 | `[-halo_width_x]` | Horizontal halo size (in microns) around macros during cut rows. |
 | `[-halo_width_y]` | Vertical halo size (in microns) around macros during cut rows. |
@@ -131,7 +131,7 @@ place_endcaps
 #### Options
 
 | Switch Name | Description |
-| ----- | ----- |
+| -------------------- | ---------------------------------------- |
 | `[-bottom_edge]` | List of masters for the bottom row endcaps. (overrides `-endcap_horizontal`). |
 | `[-corner]` | Master for the corner cells on the outer corners. |
 | `[-edge_corner]` | Master for the corner cells on the inner corners. |
@@ -182,7 +182,7 @@ tapcell_ripup
 #### Options
 
 | Switch Name | Description |
-| ----- | ----- |
+| --------------- | --------------------------------------------- |
 | `[-endcap_prefix]` | Remove endcaps with said prefix. The default value is `PHY_`. |
 | `[-tap_prefix]` | Remove tapcells with said prefix. The default value is `TAP_`. |
 
@@ -206,11 +206,6 @@ Simply run the following script:
 ```
 
 ## Limitations
-
-## FAQs
-
-Check out [GitHub discussion](https://github.com/The-OpenROAD-Project/OpenROAD/discussions/categories/q-a?discussions_q=category%3AQ%26A+tap+in%3Atitle)
-about this tool.
 
 ## License
 
