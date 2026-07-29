@@ -134,6 +134,11 @@ cc_library(
         "src/policy/SetupWnsPolicy.hh",
     ],
     hdrs = [
+        # vibeic fork file. Upstream migrated these targets to Bazel; a fork
+        # file added to CMakeLists.txt alone is invisible to the build that
+        # actually runs (see src/fin: `density_check.h file not found` from
+        # bazel-out while the header sat in the repo and in CMake).
+        "include/rsz/LeakageRecovery.hh",
         "include/rsz/GlobalSizingConfig.hh",
         "include/rsz/OdbCallBack.hh",
         "include/rsz/Resizer.hh",

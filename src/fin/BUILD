@@ -15,6 +15,16 @@ package(
 cc_library(
     name = "fin",
     srcs = [
+        # vibeic FL1 — metal density CHECK (the signoff half of the fill flow).
+        # Listed here as well as in CMakeLists.txt: upstream migrated this
+        # target to Bazel in the 2026-07-29 daily merge, and a fork file added
+        # to the CMake source list alone becomes invisible to the build that
+        # actually runs. The symptom was `Finale.h:8:10: fatal error:
+        # 'fin/density_check.h' file not found` from bazel-out — our header was
+        # in the repo, in CMake, and not in `hdrs`, so Bazel's sandbox never
+        # saw it.
+        "src/DensityCheck.cpp",
+        "src/DensityCheck.h",
         "src/DensityFill.cpp",
         "src/DensityFill.h",
         "src/Finale.cpp",
@@ -28,6 +38,9 @@ cc_library(
     hdrs = [
         "include/fin/Finale.h",
         "include/fin/MakeFinale.h",
+        # `Finale.h` includes this; a public header of ours must be a public
+        # header of the target, or every consumer of `fin` fails to compile.
+        "include/fin/density_check.h",
     ],
     includes = [
         "include",

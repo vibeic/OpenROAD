@@ -42,6 +42,12 @@ cc_library(
 cc_library(
     name = "cts",
     srcs = [
+        # vibeic fork file. Upstream migrated these targets to Bazel; a fork
+        # file added to CMakeLists.txt alone is invisible to the build that
+        # actually runs (see src/fin: `density_check.h file not found` from
+        # bazel-out while the header sat in the repo and in CMake).
+        "src/ClockTreeAnalysis.cpp",
+        "src/ClockTreeAnalysis.h",
         "src/Clock.cpp",
         "src/Clustering.cpp",
         "src/CtsOptions.cpp",

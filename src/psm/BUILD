@@ -15,6 +15,11 @@ package(
 cc_library(
     name = "psm",
     srcs = [
+        # vibeic fork file. Upstream migrated these targets to Bazel; a fork
+        # file added to CMakeLists.txt alone is invisible to the build that
+        # actually runs (see src/fin: `density_check.h file not found` from
+        # bazel-out while the header sat in the repo and in CMake).
+        "src/transient.h",
         "src/MakePDNSim.cpp",
         "src/connection.cpp",
         "src/connection.h",
@@ -35,6 +40,14 @@ cc_library(
         ":tcl",
     ],
     hdrs = [
+        # vibeic fork file. Upstream migrated these targets to Bazel; a fork
+        # file added to CMakeLists.txt alone is invisible to the build that
+        # actually runs (see src/fin: `density_check.h file not found` from
+        # bazel-out while the header sat in the repo and in CMake).
+        "include/psm/decap_opt.h",
+        "include/psm/em_signoff.h",
+        "include/psm/pdn_sizing.h",
+        "include/psm/signal_em.h",
         "include/psm/MakePDNSim.hh",
         "include/psm/pdnsim.h",
     ],
