@@ -92,7 +92,7 @@ measured against its own smaller area, so an under-dense strip at the die edge
 is still caught rather than silently dropped; a window that clips away entirely
 is skipped, never flagged.
 
-### How the two halves fit together
+## How the two halves fit together
 
 `density_fill` and `check_metal_density` share ONE measurement core
 (`fin/density_check.h` plus `DensityCheck`). When `density_fill` is given a

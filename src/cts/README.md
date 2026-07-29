@@ -147,7 +147,9 @@ report_cts_skew
 | ----- | ----- |
 | `-verbose` | Also report the arrival at every individual sink. |
 
-The same numbers are available as Tcl values:
+### Clock Skew Value
+
+The same numbers `report_cts_skew` prints, as a Tcl value.
 
 ```tcl
 cts_clock_skew clock_net
@@ -176,7 +178,9 @@ report_cts_crpr
 | ----- | ----- |
 | `-verbose` | Also report every sink pair with the shared node it was credited against. |
 
-The credit for one pair is available as a Tcl value:
+### CRPR Credit Value
+
+The credit `report_cts_crpr` prints for one sink pair, as a Tcl value.
 
 ```tcl
 cts_crpr_credit sink_pin1 sink_pin2
