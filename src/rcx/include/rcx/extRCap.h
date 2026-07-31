@@ -35,6 +35,13 @@
 
 namespace rcx {
 
+// Count of resistance-model table queries that fell out of range / hit a
+// missing row during extraction and were clamped to the nearest valid entry
+// (see extmeasure_res.cpp). extMain reports the total once, via its own logger,
+// so the user knows a sampled/generated model did not cover every geometry.
+uint64_t resModelClampCount();
+void resetResModelClampCount();
+
 class extMeasure;
 class extMeasureRC;
 struct SEQ;

@@ -1473,6 +1473,13 @@ void extMeasureRC::OpenEnded2(extSegment* cc,
                                 overMet,
                                 segFP);
 
+    // A sampled/generated model may not cover this over/under geometry;
+    // OverUnderRC then returns null.  Skip the (missing) coupling contribution
+    // rather than dereferencing null -- matches OpenEnded1's null handling and
+    // avoids a segfault during coupling-cap extraction.
+    if (rc == nullptr) {
+      continue;
+    }
     double inf_cc = 2 * len * (rc->getCoupling() + rc->getFringe());
     _extMain->updateTotalCap(rseg1, inf_cc, ii);
   }
@@ -1569,6 +1576,11 @@ void extMeasureRC::OverUnder(extSegment* cc,
                                      metOver,
                                      segFP);
 
+    // Guard sampled/generated models that do not cover this over/under
+    // geometry (OverUnderRC returns null) -- skip rather than dereference null.
+    if (rc_up == nullptr || rc_down == nullptr) {
+      continue;
+    }
     double fr2 = len * (rc_up->getFringe() + rc_down->getFringe());
     double cc_up = len * rc_up->getCoupling();
     double cc_down = len * rc_down->getCoupling();
@@ -1628,6 +1640,10 @@ void extMeasureRC::Model1(extSegment* cc,
                                    metUnder,
                                    metOver,
                                    segFP);
+    // Guard sampled/generated models missing this geometry (null RC).
+    if (rc_up == nullptr) {
+      continue;
+    }
     double cc_up = len * rc_up->getCoupling();
     // updateCoupCap(rseg1, rseg_up, ii, cc_up);
 
@@ -1640,6 +1656,9 @@ void extMeasureRC::Model1(extSegment* cc,
                                      metUnder,
                                      metOver,
                                      segFP);
+    if (rc_down == nullptr) {
+      continue;
+    }
     double cc_down = len * rc_down->getCoupling();
     // updateCoupCap(rseg1, rseg_down, ii, cc_down);
 
@@ -1652,6 +1671,9 @@ void extMeasureRC::Model1(extSegment* cc,
                                    metUnder,
                                    metOver,
                                    segFP);
+    if (rc_fr == nullptr) {
+      continue;
+    }
     double fr2 = 2 * len * rc_fr->getFringe();
     _extMain->updateTotalCap(rseg1, fr2, ii);
 

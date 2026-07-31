@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2019-2025, The OpenROAD Authors
 
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 
@@ -11,6 +12,33 @@
 #include "utl/Logger.h"
 
 namespace rcx {
+
+// The resistance-model lookup (getComputeRC_res / findIndexed_res) interpolates
+// into per-width/per-distance RESOVER tables.  A field-solver-CALIBRATED or
+// otherwise SAMPLED/GENERATED extraction model need not populate every
+// width/spacing row that a real routed design queries.  Stock OpenRCX
+// dereferenced missing rows and out-of-range interpolation indices directly,
+// segfaulting during coupling-cap extraction on such models.  The lookups below
+// now guard every dereference and CLAMP to the nearest valid entry instead of
+// crashing.  We only COUNT the clamps here (extDistRCTable does not own a
+// reliably-initialized logger); extMain reports the count once via its own
+// logger after extraction.
+static std::atomic<uint64_t> g_resModelClampCount{0};
+
+static void noteResModelClamp()
+{
+  g_resModelClampCount.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t resModelClampCount()
+{
+  return g_resModelClampCount.load(std::memory_order_relaxed);
+}
+
+void resetResModelClampCount()
+{
+  g_resModelClampCount.store(0, std::memory_order_relaxed);
+}
 
 int extMeasure::computeResDist(SEQ* s,
                                uint32_t trackMin,
@@ -192,6 +220,10 @@ void extMeasure::calcRes0(double* deltaRes,
     }
 
     extDistRC* rc = rcModel->_resOver[tgtMet]->getRes(0, _width, dist1, dist2);
+    if (rc == nullptr) {
+      deltaRes[ii] = 0.0;
+      continue;
+    }
     double R = len * rc->res_;
     deltaRes[ii] = R;
   }
@@ -238,12 +270,17 @@ extDistRC* extDistRCTable::getComputeRC_res(uint32_t dist1, uint32_t dist2)
   }
 
   // This represents the first RESOVER table row i.e., the entry
-  // in which there is no neighboring context effect.
+  // in which there is no neighboring context effect.  A sampled/generated
+  // model may not populate row 0; guard the dereference (was a segfault -- the
+  // original set rc1->diag_ BEFORE the null check).
+  if (distCnt_ == 0 || measureTableR_[0] == nullptr) {
+    return nullptr;
+  }
   extDistRC* rc1 = measureTableR_[0]->geti(0);
-  rc1->diag_ = 0.0;
   if (rc1 == nullptr) {
     return nullptr;
   }
+  rc1->diag_ = 0.0;
 
   if (dist1 + dist2 == 0) {  // ASSUMPTION: 0 dist exists as first
     return rc1;
@@ -262,6 +299,12 @@ extDistRC* extDistRCTable::getComputeRC_res(uint32_t dist1, uint32_t dist2)
 
   uint32_t index_dist = 0;
   bool found = false;
+  // A sampled model may have only the no-context row; clamp to it rather than
+  // dereferencing an unpopulated second distance row (was a segfault).
+  if (distCnt_ < 2 || measureTableR_[1] == nullptr) {
+    noteResModelClamp();
+    return rc1;
+  }
   extDistRC* rc2 = measureTableR_[1]->geti(0);
   if (rc2 == nullptr) {
     return rc1;
@@ -285,7 +328,13 @@ extDistRC* extDistRCTable::getComputeRC_res(uint32_t dist1, uint32_t dist2)
 
     uint32_t ii;
     for (ii = index_dist; ii < distCnt_; ii++) {
+      if (measureTableR_[ii] == nullptr) {
+        continue;
+      }
       rc = measureTableR_[ii]->geti(0);
+      if (rc == nullptr) {
+        continue;
+      }
       if (dist1 == rc->sep_) {
         found = true;
         index_dist = ii;
@@ -303,6 +352,13 @@ extDistRC* extDistRCTable::getComputeRC_res(uint32_t dist1, uint32_t dist2)
     }
   }
   if (found) {
+    // Guard the selected row before use; clamp to the no-context row if the
+    // sampled model left it unpopulated.
+    if (index_dist >= distCnt_ || measureTableR_[index_dist] == nullptr
+        || computeTableR_[index_dist] == nullptr) {
+      noteResModelClamp();
+      return rc1;
+    }
     if (!measureInR_) {
       delete measureTable_;
     }
@@ -310,23 +366,39 @@ extDistRC* extDistRCTable::getComputeRC_res(uint32_t dist1, uint32_t dist2)
     measureTable_ = measureTableR_[index_dist];
     computeTable_ = computeTableR_[index_dist];
     extDistRC* res = findIndexed_res(dist1, dist2);
+    if (res == nullptr) {
+      noteResModelClamp();
+      return rc1;
+    }
     res->diag_ = 0;
-    if (rc != nullptr && dist1 < rc->sep_) {
+    if (rc != nullptr && dist1 < rc->sep_ && index_dist > 0
+        && measureTableR_[index_dist - 1] != nullptr
+        && computeTableR_[index_dist - 1] != nullptr) {
       measureTable_ = measureTableR_[index_dist - 1];
       computeTable_ = computeTableR_[index_dist - 1];
       extDistRC* res1 = findIndexed_res(dist1, dist2);
+      if (res1 == nullptr) {
+        return res;
+      }
       double R1 = res->interpolate_res(dist1, res1);
       res1->diag_ = R1;
       return res1;
     }
     return res;
   }
-  return nullptr;
+  // No row matched: clamp to the no-context row instead of returning null.
+  return rc1;
 }
 
 extDistRC* extDistRCTable::findIndexed_res(uint32_t dist1, uint32_t dist2)
 {
+  if (measureTable_ == nullptr || measureTable_->getCnt() <= 0) {
+    return nullptr;
+  }
   extDistRC* firstRC = measureTable_->get(0);
+  if (firstRC == nullptr) {
+    return nullptr;
+  }
   uint32_t firstDist = firstRC->sep_;
   if (dist2 <= firstDist) {
     return firstRC;
@@ -335,12 +407,26 @@ extDistRC* extDistRCTable::findIndexed_res(uint32_t dist1, uint32_t dist2)
     return firstRC;
   }
   extDistRC* resLast = measureTable_->getLast();
+  if (resLast == nullptr) {
+    return firstRC;
+  }
   if (dist2 >= resLast->sep_) {
     return resLast;
   }
 
+  // Interpolated lookup into the per-unit compute table.  Guard a null/empty
+  // compute table, a zero unit (div-by-zero), and an out-of-range index that
+  // geti() cannot satisfy -- clamp to the nearest populated bound instead of
+  // returning a null the caller would dereference.
+  if (computeTable_ == nullptr || unit_ == 0) {
+    return firstRC;
+  }
   uint32_t n = dist2 / unit_;
   extDistRC* res = computeTable_->geti(n);
+  if (res == nullptr) {
+    noteResModelClamp();
+    return resLast;
+  }
   return res;
 }
 

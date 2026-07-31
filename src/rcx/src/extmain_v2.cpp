@@ -127,10 +127,23 @@ void extMain::makeBlockRCsegs_v2(const char* netNames, const char* extRules)
     // Print out stats
     infoBeforeCouplingExt();
 
+    resetResModelClampCount();
     Rect maxRect = _block->getDieArea();
     couplingFlow_v2(maxRect, _couplingFlag, nullptr);
     // Print out stats on db Ojects created during extraction
     couplingExtEnd_v2();
+
+    const uint64_t clamped = resModelClampCount();
+    if (clamped > 0) {
+      logger_->warn(RCX,
+                    515,
+                    "Resistance model had {} out-of-range or missing table "
+                    "queries during coupling extraction; each was clamped to "
+                    "the nearest valid entry. The extraction model may be "
+                    "sampled or generated and not cover every width/spacing, so "
+                    "resistance near those geometries is approximate.",
+                    clamped);
+    }
   }
   // Print out stats on db Ojects created during extraction
   // _modelTable->resetCnt(0);
