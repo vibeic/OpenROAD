@@ -89,6 +89,6 @@ Total Placement Failures:          0
 [INFO DRT-0179] Init gr pin query.
 [INFO ANT-0002] Found 0 net violations.
 [INFO ANT-0001] Found 0 pin violations.
-[INFO GRT-0311] repair_antennas -reroute: antenna-clean after 1 reroute pass(es).
+[INFO GRT-0313] repair_antennas -reroute: antenna-clean after 1 reroute pass(es).
 antenna_violations_after 0
 repair_antennas_reroute: PASS

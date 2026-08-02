@@ -373,7 +373,7 @@ proc repair_antennas { args } {
       }
       for { set pass 0 } { $pass < $reroute_cap } { incr pass } {
         if { [check_antennas] == 0 } {
-          utl::info GRT 311 "repair_antennas -reroute: antenna-clean after\
+          utl::info GRT 313 "repair_antennas -reroute: antenna-clean after\
             $pass reroute pass(es)."
           return 0
         }
