@@ -27,6 +27,8 @@ COMPULSORY_TESTS = [
     "check9",
     "check_fixed_only",
     "check_placeable_only",
+    "check_no_abort",
+    "check_no_abort_clean",
     "diamond01",
     "diamond_multi_height",
     "diamond_one_site_gap",
@@ -65,6 +67,7 @@ COMPULSORY_TESTS = [
     "multi_height_one_site_gap_disallow",
     "multi_height_power_align",
     "multi_height_rows",
+    "negotiation_no_converge",
     "obstruction1",
     "obstruction2",
     "one_site_gap_disallow",
@@ -170,6 +173,12 @@ filegroup(
             ],
             "check_placeable_only": [
                 "check_fixed_only.def",
+            ],
+            "check_no_abort": [
+                "check2.def",
+            ],
+            "check_no_abort_clean": [
+                "check9.def",
                 "extra.lef",
             ],
             "diamond01": [
@@ -286,6 +295,9 @@ filegroup(
             ],
             "multi_height_rows": [
                 "Nangate45/fake_macros.lef",
+            ],
+            "negotiation_no_converge": [
+                "fragmented_row03.def",
             ],
             "obstruction2": [
                 "Nangate45/fakeram45_64x7.lib",

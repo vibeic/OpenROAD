@@ -47,11 +47,16 @@ COMPULSORY_TESTS = [
     "gcd_gt2n_backside",
     "gcd_gt2n_backside_wo_pins",
     "gcd_gt2n_backside_wo_pins_straps",
+    "gcd_em_density_vdd",
+    "gcd_signal_em",
     "gcd_no_vsrc",
     "gcd_no_vsrc_reuse",
+    "gcd_sizing_vdd",
     "gcd_sky130_vdd",
     "gcd_test_assign_power",
     "gcd_test_vdd",
+    "gcd_transient_vdd",
+    "gcd_transient_vectored",
     "gcd_vss_no_vsrc",
     "gcd_write_sp_test_vdd",
     "insert_decap1",
@@ -145,6 +150,9 @@ filegroup(
         "Nangate45_data/gcd.def",
         "Nangate45_data/gcd.sdc",
         "Nangate45_data/gcd_floorplanning.def",
+        # vibeic fork data: gcd_signal_em needs a ROUTED def -- signal-net EM is
+        # a property of the routed geometry, so the placed gcd.def cannot serve.
+        "Nangate45_data/gcd_routed.def",
         "Vsrc_aes_vdd.loc",
         "Vsrc_aes_vss.loc",
         "Vsrc_gcd_vdd.loc",
@@ -176,6 +184,13 @@ filegroup(
         "gt2n_gcd_data/gcd.def",
         "gt2n_gcd_data/gcd.sdc",
         "gt2n_gcd_data/gcd_pins.def",
+        # vibeic fork goldens.  These MUST be listed explicitly: the per-test
+        # `glob([test_name + ".*"])` below does not match a "-voltage.rptok"
+        # suffix, so a transient golden left to the glob is silently absent from
+        # the sandbox and the test fails for a reason unrelated to the tool --
+        # the same undeclared-data failure mode as cts:mmmc_skew.
+        "gcd_transient_vdd-voltage.rptok",
+        "gcd_transient_vectored-voltage.rptok",
         "helpers.tcl",
         "ihp-sg13g2_data/IOLib.lef",
         "ihp-sg13g2_data/IOLib_dummy.lib",

@@ -58,7 +58,14 @@ COMPULSORY_TESTS = [
     "symmetry",
 ]
 
-ALL_TESTS = COMPULSORY_TESTS
+# From CMakeLists.txt or_integration_tests(PASSFAIL_TESTS
+# These are self-checking: the .tcl computes the verdict and prints "pass" on
+# the last line, so there is deliberately no <test>.ok golden.
+PASSFAIL_TESTS = [
+    "bound_to_placement",
+]
+
+ALL_TESTS = COMPULSORY_TESTS + PASSFAIL_TESTS
 
 filegroup(
     name = "regression_resources",
@@ -158,6 +165,7 @@ filegroup(
             "abutting_macros_step": [],
             "abutting_macros_step_no_corners": ["abutting_macros_step.def"],
             "allow_one_site_gaps": ["disallow_one_site_gaps.def"],
+            "bound_to_placement": ["sparse_tapcell.def"],
             "boundary_macros": [],
             "cut_rows_asymmetric_halo": [
                 "Nangate45_data/l_macro.lef",
@@ -195,8 +203,10 @@ filegroup(
 [
     regression_test(
         name = test_name,
+        check_log = test_name not in PASSFAIL_TESTS,
+        check_passfail = test_name in PASSFAIL_TESTS,
         data = [":" + test_name + "_resources"],
-        tags = [] if test_name in COMPULSORY_TESTS else ["manual"],
+        tags = [] if test_name in COMPULSORY_TESTS + PASSFAIL_TESTS else ["manual"],
         visibility = ["//visibility:public"],
     )
     for test_name in ALL_TESTS
