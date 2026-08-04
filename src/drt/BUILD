@@ -124,6 +124,12 @@ cc_library(
         "src/frDesign.h",
         "src/frRegionQuery.h",
         "src/gc/FlexGC.h",
+        # Consumed by //src/drt/test:multi_pin_bterm_unittest and
+        # :routing_via_connectivity_unittest, which gate io::
+        # multiPinBTermSupported() / firstUnconnectedRoutingPair().  A header
+        # left in :drt's srcs is private to that library, so the tests could
+        # not see it.
+        "src/io/io.h",
         "src/pa/AbstractPAGraphics.h",
         "src/pa/FlexPA.h",
         "src/pa/FlexPA_unique.h",
@@ -139,6 +145,7 @@ cc_library(
         "//src/odb/src/db",
         "//src/utl",
         "@boost.container",
+        "@boost.icl",  # io/io.h
         "@boost.polygon",
         "@boost.serialization",
     ],
@@ -201,7 +208,6 @@ cc_library(
         "src/io/GuideProcessor.cpp",
         "src/io/GuideProcessor.h",
         "src/io/io.cpp",
-        "src/io/io.h",
         "src/io/io_parser_helper.cpp",
         "src/io/io_pin.cpp",
         "src/pa/FlexPA.cpp",

@@ -133,7 +133,14 @@ COMPULSORY_TESTS = [
     "write_pin_placement6",
 ]
 
-ALL_TESTS = COMPULSORY_TESTS
+# From CMakeLists.txt or_integration_tests(PASSFAIL_TESTS
+# These are self-checking: the .tcl computes the verdict and prints "pass" on
+# the last line (or errors out), so there is deliberately no <test>.ok golden.
+PASSFAIL_TESTS = [
+    "io_net_weight",
+]
+
+ALL_TESTS = COMPULSORY_TESTS + PASSFAIL_TESTS
 
 filegroup(
     name = "regression_resources",
@@ -157,6 +164,9 @@ filegroup(
             "blocked_region": [],
             "gcd": [],
             "group_pins3": [],
+            # Reads only helpers.tcl, Nangate45/* and its own io_net_weight.v,
+            # all of which come from :regression_resources / the per-test glob.
+            "io_net_weight": [],
             "large_groups1": [],
             "multi_track_pattern1": ["multi_track_pattern2.lef"],
             "multi_track_pattern2": ["multi_track_pattern1.lef"],
@@ -181,8 +191,10 @@ filegroup(
 [
     regression_test(
         name = test_name,
+        check_log = test_name not in PASSFAIL_TESTS,
+        check_passfail = test_name in PASSFAIL_TESTS,
         data = [":" + test_name + "_resources"],
-        tags = [] if test_name in COMPULSORY_TESTS else ["manual"],
+        tags = [] if test_name in COMPULSORY_TESTS + PASSFAIL_TESTS else ["manual"],
         visibility = ["//visibility:public"],
     )
     for test_name in ALL_TESTS

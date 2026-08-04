@@ -12,6 +12,19 @@ package(
     features = ["layering_check"],
 )
 
+# The metal density rule engine is header-only and dependency-free -- see
+# test/cpp/CMakeLists.txt, which links the same correctness gate against
+# nothing but gtest.  Publishing it as its own target lets the Bazel unit test
+# keep that property instead of pulling in the whole :fin surface (ord, gui,
+# odb, tcl) to read one header.  The header stays in :fin's `hdrs` too: Finale.h
+# includes it, so every consumer of :fin must keep seeing it.
+cc_library(
+    name = "density_check_hdr",
+    hdrs = ["include/fin/density_check.h"],
+    includes = ["include"],
+    visibility = ["//src/fin/test/cpp:__pkg__"],
+)
+
 cc_library(
     name = "fin",
     srcs = [

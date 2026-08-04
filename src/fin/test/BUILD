@@ -9,6 +9,13 @@ package(features = ["layering_check"])
 # From CMakeLists.txt or_integration_tests(TESTS
 COMPULSORY_TESTS = [
     "gcd_fill",
+    "density_check_fixture",
+    "density_window",
+    "density_window_uncapped",
+    "coupling_fill",
+    "coupling_fill_off",
+    "density_failsafe",
+    "density_geometry_mismatch",
 ]
 
 ALL_TESTS = COMPULSORY_TESTS
@@ -48,7 +55,40 @@ filegroup(
             [
                 test_name + ".*",
             ],
-        ),
+        ) + {
+            # Files a .tcl reads that the per-test glob does not reach: a
+            # shared helper, a rule file, or a fixture .def owned by another
+            # test.  Bazel runs the test in a sandbox, so anything not listed
+            # here is simply absent at run time.
+            "coupling_fill": [
+                "coupling_helpers.tcl",
+                "fill_met1.json",
+            ],
+            "coupling_fill_off": [
+                "coupling_fill.def",
+                "coupling_helpers.tcl",
+                "fill_met1.json",
+            ],
+            "density_check_fixture": [
+                "density_fixture.def",
+            ],
+            "density_failsafe": [
+                "density_window.def",
+                "fill_met1.json",
+            ],
+            "density_geometry_mismatch": [
+                "density_window.def",
+                "fill_met1.json",
+            ],
+            "density_window": [
+                "fill_met1.json",
+                "met1_band.txt",
+            ],
+            "density_window_uncapped": [
+                "density_window.def",
+                "fill_met1.json",
+            ],
+        }.get(test_name, []),
     )
     for test_name in ALL_TESTS
 ]

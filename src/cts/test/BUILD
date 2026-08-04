@@ -195,6 +195,13 @@ filegroup(
                 "sky130hs/sky130hs_std_cell.lef",
                 "sky130hs/sky130hs_tt.lib",
             ],
+            # define_corners fast/typical/slow: the fast and slow liberties are
+            # read directly by mmmc_skew.tcl but are not in :regression_resources,
+            # so under the bazel sandbox the test cannot see them.
+            "mmmc_skew": [
+                "Nangate45/Nangate45_fast.lib",
+                "Nangate45/Nangate45_slow.lib",
+            ],
             "no_clocks": [
                 "no_clock.def",
             ],

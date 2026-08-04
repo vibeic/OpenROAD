@@ -73,6 +73,29 @@ cc_library(
     ],
 )
 
+# vibeic fork target.  The five analysis engines below are header-only and pull
+# in nothing but Eigen, which is exactly why their CMake unit tests link no
+# OpenDB/OpenSTA machinery.  Exposing them as their own header-only library lets
+# the bazel unit tests keep that property: depending on ":psm" instead would
+# make a second-scale gate require a full OpenROAD build, and a gate nobody can
+# afford to run is a gate that does not run.
+cc_library(
+    name = "analysis_headers",
+    hdrs = [
+        "include/psm/decap_opt.h",
+        "include/psm/em_signoff.h",
+        "include/psm/pdn_sizing.h",
+        "include/psm/signal_em.h",
+        "src/transient.h",
+    ],
+    includes = [
+        "include",
+        "src",
+    ],
+    visibility = ["//:__subpackages__"],
+    deps = ["@eigen"],
+)
+
 tcl_encode(
     name = "tcl",
     srcs = [

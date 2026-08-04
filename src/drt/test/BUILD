@@ -208,6 +208,49 @@ cc_test(
     ],
 )
 
+# From CMakeLists.txt foreach(test_name gcTest taTest multiPinBTermTest
+# routingViaConnectivityTest).  Neither of the two below uses the shared
+# Fixture, so unlike gc/ta they compile only their own source.
+test_suite(
+    name = "multi_pin_bterm_test",
+    tests = [":multi_pin_bterm_unittest"],
+)
+
+cc_test(
+    name = "multi_pin_bterm_unittest",
+    srcs = ["multiPinBTermTest.cpp"],
+    includes = [
+        "../src",
+    ],
+    deps = [
+        "//src/drt",  # buildcleaner: keep for io::multiPinBTermSupported
+        "//src/drt:drt_private_hdrs",
+        "//src/odb/src/db",
+        "//src/utl",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+test_suite(
+    name = "routing_via_connectivity_test",
+    tests = [":routing_via_connectivity_unittest"],
+)
+
+cc_test(
+    name = "routing_via_connectivity_unittest",
+    srcs = ["routingViaConnectivityTest.cpp"],
+    includes = [
+        "../src",
+    ],
+    deps = [
+        "//src/drt",  # buildcleaner: keep for io::firstUnconnectedRoutingPair
+        "//src/drt:drt_private_hdrs",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 py_test(
     name = "drt_man_tcl_check",
     srcs = ["drt_man_tcl_check.py"],
