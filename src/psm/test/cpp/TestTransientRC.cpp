@@ -460,5 +460,80 @@ TEST(TransientRC, VectoredPhaseSpreadReducesDroop)
          "simultaneous-switching upper bound";
 }
 
+// Vibe-IC fork regression: the worst-timestep tracking must FOLLOW the
+// transient, not latch whatever the first step happened to be.
+//
+// Why this test exists: a mutation that freezes the worst-value update at
+// step 1 (`if (k == 1) result.worst_value = step_extreme;`) leaves all seven
+// pre-existing TransientRC cases GREEN, because none of them distinguishes
+// "the extreme over the window" from "the extreme at the first step" -- their
+// stimuli are worst at t=0 or they assert only on v_min/v_max, which is
+// maintained by a different code path. A transient IR analysis that only ever
+// records step 1 reports a mid-transient droop as whatever step 1 was, which
+// is the whole failure the analysis exists to catch.
+//
+// The design here makes step 1 the BEST case: both nodes start at the rail and
+// no load current flows until half-way through the window, so the true minimum
+// can only occur late. The load-bearing assertion is the cross-check between
+// `worst_value` and `v_min`, which are accumulated by two independent paths in
+// solveTransientMNA and must agree.
+TEST(TransientRC, WorstStepFollowsTheTransientInsteadOfLatchingStepOne)
+{
+  const double vdd = 1.1;          // supply [V]
+  const double r = 2.0;            // resistance [ohm]
+  const double c = 5.0e-10;        // capacitance [F]
+  const double g = 1.0 / r;        // conductance [S]
+  const double g_src = 1.0e9 * g;  // stiff pin so v_S ~ Vdd
+
+  const double dt = (r * c) / 100.0;
+  const int nsteps = 400;
+  const int surge_step = 200;  // load switches on only half-way through
+
+  const Eigen::SparseMatrix<double> gmat = BuildRcConductance(g, g_src);
+
+  Eigen::VectorXd cap_diag(2);
+  cap_diag << c, 0.0;  // capacitance only on node B
+
+  Eigen::VectorXd v0(2);
+  v0 << vdd, vdd;  // START AT THE RAIL: step 1 is the least-droop step
+
+  auto rhs_fn = [&](int k, double) -> Eigen::VectorXd {
+    Eigen::VectorXd rhs(2);
+    // No load before the surge; a hard 50 mA draw on node B after it.
+    rhs << (k >= surge_step ? -0.05 : 0.0), g_src * vdd;
+    return rhs;
+  };
+
+  const TransientMNAResult res = solveTransientMNA(
+      gmat, cap_diag, v0, dt, nsteps, rhs_fn, /*track_min=*/true);
+
+  std::cout << "[WORST-STEP] worst_step = " << res.worst_step
+            << " (surge begins at " << surge_step
+            << "), worst_value = " << res.worst_value
+            << " V, min over v_min = " << res.v_min.minCoeff() << " V"
+            << std::endl;
+
+  // A real droop has to have happened, or the fixture proves nothing.
+  EXPECT_LT(res.worst_value, vdd - 1.0e-3)
+      << "fixture is vacuous: no measurable droop occurred";
+
+  // 1. The worst step must be after the load switched on -- never step 1.
+  EXPECT_GT(res.worst_step, surge_step)
+      << "worst_step=" << res.worst_step
+      << " but the load does not switch on until step " << surge_step
+      << "; the tracker is reporting an early step as the worst.";
+
+  // 2. THE CROSS-CHECK: worst_value and v_min are accumulated by two
+  //    independent paths over the same v_k, so the global extreme must agree.
+  //    A tracker frozen at any single step fails here even if worst_step is
+  //    updated correctly.
+  EXPECT_DOUBLE_EQ(res.worst_value, res.v_min.minCoeff())
+      << "worst_value disagrees with the independently-tracked per-node "
+         "minimum; the worst-timestep tracker is not following the transient.";
+
+  // 3. The stored snapshot must be the one taken at that step.
+  EXPECT_DOUBLE_EQ(res.v_at_worst.minCoeff(), res.worst_value);
+}
+
 }  // namespace
 }  // namespace psm
