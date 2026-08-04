@@ -6898,6 +6898,13 @@ bool Resizer::estimateSlewsAfterBufferRemoval(
 
   BnetPtr tree1 = makeBufferedNet(drvr_pin, corner);
   BnetPtr tree2 = makeBufferedNet(buffer_drvr_pin, corner);
+  // vibeic fork 17c2fe4e5d (SIGILL when a subtree cannot be built).
+  // REDUNDANT WITH UPSTREAM as of the 2026-08-04 merge -- upstream now carries
+  // an identical guard, so this is no longer a divergence of ours. RETAINED
+  // deliberately, not overlooked: the patch is in the no-oracle set (no test
+  // covers it), so "reverting leaves the suite green" is unestablishable
+  // rather than satisfied, and an unverifiable revert of a working guard is
+  // the worse trade. Audited 2026-08-05; do not re-file as a finding.
   if (!tree1 || !tree2) {
     return false;
   }
