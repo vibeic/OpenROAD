@@ -188,6 +188,20 @@ class TritonRoute : public PinAccessService
   // rectangle >= min-area. Runs OUTSIDE the ripup loop, so it never re-enters
   // the maze router. Returns the number of polygons patched.
   int patchMinAreaViolations();
+  // vibeic fork: post-route whole-design DRC VERIFICATION.
+  //
+  // The number detailed_route publishes today is the residual in-loop marker
+  // set: the union of what the per-worker, per-iteration GC happened to raise,
+  // minus whatever a later worker cleared over its own box.  That is a
+  // CONVERGENCE counter for the ripup loop, not a statement about the finished
+  // route -- and two things run AFTER FlexDR::end() has already written the
+  // report (this fork's own additive min-area repair, and any caller-side
+  // reroute), so the published verdict can describe geometry that no longer
+  // exists.  This re-runs the SAME GC engine over the whole die once routing is
+  // final, replaces the block's marker set with the result, and reports it, so
+  // "0 violations" means "verified clean", not "the loop stopped finding
+  // things".  Returns the verified violation count.
+  int verifyRoute();
   odb::dbDatabase* getDb() const { return db_; }
   void fixMaxSpacing(int num_threads);
   void deleteInstancePAData(frInst* inst, bool delete_inst = false);

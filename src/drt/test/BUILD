@@ -15,10 +15,10 @@ COMPULSORY_TESTS = [
     "drc_test",
     "ispd18_sample",
     "ispd18_sample_incr",
+    "ndr_no_auto_taper",
     "ndr_vias1",
     "ndr_vias2",
     "ndr_vias3",
-    "ndr_no_auto_taper",
     "obstruction",
     "single_step",
     "ta_ap_aligned",
@@ -26,6 +26,7 @@ COMPULSORY_TESTS = [
     "top_level_term",
     "top_level_term2",
     "via_access_layer",
+    "via_patch_min_width",
 ]
 
 # From CMakeLists.txt or_integration_tests(PASSFAIL_TESTS

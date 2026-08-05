@@ -1573,6 +1573,74 @@ int TritonRoute::patchMinAreaViolations()
   return total_patched;
 }
 
+int TritonRoute::verifyRoute()
+{
+  frDesign* design = getDesign();
+  if (design == nullptr) {
+    return -1;
+  }
+  frBlock* block = design->getTopBlock();
+  frRegionQuery* rq = design->getRegionQuery();
+  if (block == nullptr || rq == nullptr) {
+    return -1;
+  }
+  // getDRCMarkers() tiles the die by gcell; without a gcell grid there is
+  // nothing to tile and verification cannot run.
+  if (block->getGCellPatterns().size() < 2) {
+    return -1;
+  }
+
+  // What the ripup loop last said about itself.
+  const int in_loop = block->getNumMarkers();
+
+  // The post-route repair passes commit geometry after the last DR worker ran.
+  // Re-index the DR-object region query so the GC engine checks what is
+  // actually about to be written out.
+  rq->initDRObj();
+
+  frList<std::unique_ptr<frMarker>> markers;
+  getDRCMarkers(markers, block->getBBox());
+  const int verified = static_cast<int>(markers.size());
+
+  // Replace the block's marker set with the verified one so
+  // detailed_route_num_drvs, the GUI marker browser and the DRC report all
+  // quote the same number, and that number describes the finished route.
+  {
+    std::vector<frMarker*> stale;
+    stale.reserve(block->getNumMarkers());
+    for (const auto& marker : block->getMarkers()) {
+      stale.push_back(marker.get());
+    }
+    for (frMarker* marker : stale) {
+      rq->removeMarker(marker);
+      block->removeMarker(marker);
+    }
+    for (auto& marker : markers) {
+      frMarker* ptr = marker.get();
+      rq->addMarker(ptr);
+      block->addMarker(std::move(marker));
+    }
+  }
+
+  if (verified > in_loop) {
+    logger_->warn(DRT,
+                  701,
+                  "Post-route verification found {} violation(s) that the "
+                  "routing loop did not report ({} in-loop). The published "
+                  "result is the verified one.",
+                  verified,
+                  in_loop);
+  } else if (router_cfg_->VERBOSE > 0) {
+    logger_->info(
+        DRT, 702, "Post-route verification: {} violation(s).", verified);
+  }
+
+  // Re-emit under the same category the routing loop used, so the verified set
+  // REPLACES the in-loop residual rather than sitting beside it.
+  reportDRC(router_cfg_->DRC_RPT_FILE, block->getMarkers(), "DRC");
+  return verified;
+}
+
 int TritonRoute::main()
 {
   utl::Timer timer;
@@ -1673,6 +1741,12 @@ int TritonRoute::main()
   // the ripup loop. Purely additive metal on the owning signal net.
   if (!router_cfg_->SINGLE_STEP_DR) {
     patchMinAreaViolations();
+    // vibeic fork: verify the FINISHED route before writing it out. Until this
+    // ran, the number detailed_route published was the ripup loop's own
+    // residual -- measured to disagree with a whole-design pass of the same GC
+    // engine on the same DEF -- and it was written before the min-area repair
+    // above had even added its patches.
+    verifyRoute();
     endFR();
   }
   logger_->info(DRT, 501, "Runtime: {:.2f}s", timer.elapsed());
