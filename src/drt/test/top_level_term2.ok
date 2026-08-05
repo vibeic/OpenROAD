@@ -53,4 +53,5 @@
 [INFO DRT-0036] via4 guide region query size = 0.
 [INFO DRT-0036] met5 guide region query size = 0.
 [INFO DRT-0179] Init gr pin query.
+[INFO DRT-0700] Post-route min-area repair: patched 1 isolated undersized polygon(s); 0 unresolved.
 No differences found.
