@@ -67,6 +67,7 @@ import ast
 import os
 import re
 import sys
+import pathlib
 from pathlib import Path
 
 # Tests that are CMake-only ON PURPOSE.  Every entry needs a reason, and the
@@ -341,8 +342,37 @@ def main():
 
     unwired = []
     checked = 0
+    # A SUBMODULE'S TESTS ARE NOT OURS TO WIRE.
+    #
+    # `src/sta` is a git submodule -- OpenSTA, with its own CMake and its own
+    # BUILD.bazel. Its tests are registered in `src/sta/dcalc/test/cpp/
+    # CMakeLists.txt` and friends, i.e. in upstream's files, and they are absent
+    # from OpenROAD's bazel graph BY CONSTRUCTION: bazel builds `//src/sta:
+    # opensta_lib` as a LIBRARY dependency, never that project's test targets.
+    #
+    # Measured 2026-08-06: without this, the check reports 10 UNEXPECTED, all
+    # `sta:*`, and blocks the 05:30 round's OpenROAD merge -- which is what it
+    # did today. Listing the ten in KNOWN_CMAKE_ONLY would have gone green and
+    # been wrong in a worse way: OpenSTA adds a test and the round stops again,
+    # for a file nobody here can wire.
+    #
+    # Skipped by MEASURING that the directory is a gitlink, not by name. A name
+    # list would need editing the next time a submodule is added, and the
+    # failure mode of forgetting is a blocked round, not a visible error.
+    gitlinks = set()
+    try:
+        import subprocess
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "--stage", "src"],
+                             capture_output=True, text=True, timeout=60).stdout
+        for ln in out.splitlines():
+            if ln.startswith("160000 "):                     # gitlink mode
+                gitlinks.add(pathlib.Path(ln.split("\t", 1)[-1]).name)
+    except Exception:                                        # noqa: BLE001
+        gitlinks = set()
+
     for mod_dir in sorted(p for p in src.iterdir()
-                          if p.is_dir() and (p / "CMakeLists.txt").exists()):
+                          if p.is_dir() and (p / "CMakeLists.txt").exists()
+                          and p.name not in gitlinks):
         mod = mod_dir.name
         c_int = cmake_integration_tests(mod_dir / "test" / "CMakeLists.txt")
         c_cpp = cmake_cpp_tests(mod_dir)
