@@ -8,6 +8,8 @@ package(features = ["layering_check"])
 
 # From CMakeLists.txt or_integration_tests(TESTS
 COMPULSORY_TESTS = [
+    "abutting_macros_step",
+    "abutting_macros_step_no_corners",
     "aes_gf180",
     "allow_one_site_gaps",
     "avoid_overlap",
@@ -155,6 +157,8 @@ filegroup(
                 test_name + ".*",
             ],
         ) + {
+            "abutting_macros_step": [],
+            "abutting_macros_step_no_corners": ["abutting_macros_step.def"],
             "allow_one_site_gaps": ["disallow_one_site_gaps.def"],
             "bound_to_placement": ["sparse_tapcell.def"],
             "boundary_macros": [],
