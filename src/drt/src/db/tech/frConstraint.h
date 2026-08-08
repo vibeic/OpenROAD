@@ -835,7 +835,18 @@ class frLef58SpacingEndOfLineConstraint : public frConstraint
     return withinConstraint_;
   }
   bool hasToConcaveCornerConstraint() const { return false; }
-  bool hasToNotchLengthConstraint() const { return false; }
+  // BUG FIX: was hardcoded `return false` regardless of what the LEF/ODB
+  // rule actually declared -- the TONOTCHLENGTH value was parsed correctly
+  // into odb (dbTechLayerSpacingEolRule::isToNotchLengthValid() /
+  // getNotchLength()) but silently discarded at the odb -> frConstraint
+  // conversion in io.cpp, so hasToNotchLengthConstraint() could never be
+  // true and getNotchLength() did not exist. Measured effect: a design's
+  // staged LEF58_SPACING ... TONOTCHLENGTH rule parsed with zero warnings
+  // yet produced byte-identical detailed-route output to a run with no rule
+  // staged at all -- indistinguishable from success until compared against
+  // real post-route sign-off DRC.
+  bool hasToNotchLengthConstraint() const { return notchLength_ >= 0; }
+  frCoord getNotchLength() const { return notchLength_; }
   // setters
   void setEol(frCoord eolSpaceIn, frCoord eolWidthIn, bool exactWidthIn = false)
   {
@@ -853,6 +864,7 @@ class frLef58SpacingEndOfLineConstraint : public frConstraint
   {
     withinConstraint_ = in;
   }
+  void setNotchLength(frCoord in) { notchLength_ = in; }
   // others
   frConstraintTypeEnum typeId() const override
   {
@@ -862,12 +874,13 @@ class frLef58SpacingEndOfLineConstraint : public frConstraint
   {
     logger->report(
         "SPACING eolSpace {} eolWidth {} exactWidth {} wrongDirSpacing {} "
-        "wrongDirSpace {} ",
+        "wrongDirSpace {} notchLength {} ",
         eolSpace_,
         eolWidth_,
         exactWidth_,
         wrongDirSpacing_,
-        wrongDirSpace_);
+        wrongDirSpace_,
+        notchLength_);
     if (withinConstraint_ != nullptr) {
       withinConstraint_->report(logger);
     }
@@ -879,6 +892,7 @@ class frLef58SpacingEndOfLineConstraint : public frConstraint
   bool exactWidth_{false};
   bool wrongDirSpacing_{false};
   frCoord wrongDirSpace_{0};
+  frCoord notchLength_{-1};
   std::shared_ptr<frLef58SpacingEndOfLineWithinConstraint> withinConstraint_;
 };
 

@@ -245,6 +245,19 @@ void FlexRP::prep_eolForbiddenLen_helper(const frLayer* layer,
           eolSpace = std::max(eolSpace, endToEndCon->getEndToEndSpace());
         }
       }
+      // BUG FIX: a TONOTCHLENGTH-only rule (no WITHIN clause) previously
+      // left eolWithin at whatever WITHIN defaulted to (0, since the odb ->
+      // frConstraint conversion always attaches a within-constraint object
+      // but never populated it for this rule shape) -- the router-cost
+      // query box built from (eolSpace, eolWithin) in
+      // FlexDRWorker::modEolCost degenerates to zero width in one dimension
+      // when eolWithin is 0, silently neutering the avoidance region even
+      // though eolSpace itself was set correctly. The notch length is the
+      // right proxy for how far to look: a same-net notch shorter than it
+      // is exactly what TONOTCHLENGTH declares must be spaced by eolSpace.
+      if (con->hasToNotchLengthConstraint()) {
+        eolWithin = std::max(eolWithin, con->getNotchLength());
+      }
     }
   }
   for (const auto con : layer->getLef58EolKeepOutConstraints()) {

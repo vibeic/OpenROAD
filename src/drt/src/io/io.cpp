@@ -1624,6 +1624,14 @@ void io::Parser::setRoutingLayerProperties(odb::dbTechLayer* layer,
       enc->setBelow(rule->isBelowValid());
       enc->setAllCuts(rule->isAllCutsValid());
     }
+    // BUG FIX: TONOTCHLENGTH was parsed into odb but never read back out --
+    // hasToNotchLengthConstraint() was a hardcoded `return false` stub (see
+    // frConstraint.h) so this value was silently discarded. A rule that
+    // declares TONOTCHLENGTH but no WITHIN clause is otherwise
+    // indistinguishable from an empty/no-op rule once it reaches TritonRoute.
+    if (rule->isToNotchLengthValid()) {
+      con->setNotchLength(rule->getNotchLength());
+    }
     tmpLayer->addLef58SpacingEndOfLineConstraint(con.get());
     getTech()->addUConstraint(std::move(con));
   }
