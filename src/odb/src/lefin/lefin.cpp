@@ -193,8 +193,35 @@ static void create_path_box(dbObject* obj,
   }
 }
 
+namespace {
+
+// Geometry items that cannot be materialized without a resolved dbTechLayer.
+// Items that do not appear here either carry their own layer information
+// (VIA / VIAITER, which resolve a dbTechVia) or only update parser state.
+bool geomItemRequiresLayer(LefParser::lefiGeomEnum item_type)
+{
+  switch (item_type) {
+    case LefParser::lefiGeomPathE:
+    case LefParser::lefiGeomPathIterE:
+    case LefParser::lefiGeomRectE:
+    case LefParser::lefiGeomRectIterE:
+    case LefParser::lefiGeomPolygonE:
+    case LefParser::lefiGeomPolygonIterE:
+      return true;
+    default:
+      return false;
+  }
+}
+
+}  // namespace
+
 //
 // add geoms to master or terminal
+//
+// An item that cannot be resolved (undefined layer or undefined via) is
+// skipped on its own and the rest of the section is still read.  Bailing out
+// of the loop would truncate the section at the first such item and drop
+// geometry on layers that do resolve.  Whatever is skipped is reported.
 //
 bool lefinReader::addGeoms(dbObject* object,
                            bool is_pin,
@@ -205,20 +232,40 @@ bool lefinReader::addGeoms(dbObject* object,
   int dw = 0;
   int designRuleWidth = -1;
   int minSpacing = -1;
+  // Geometry items actually lost, and references that could not be resolved.
+  int dropped_items = 0;
+  int unresolved_refs = 0;
 
   for (int i = 0; i < count; i++) {
     master_modified_ = true;
 
-    switch (geometry->itemType(i)) {
+    const LefParser::lefiGeomEnum item_type = geometry->itemType(i);
+
+    // The current layer is unresolved (or no LAYER statement has been seen
+    // yet).  Drop just this item instead of abandoning the whole section.
+    if (layer == nullptr && geomItemRequiresLayer(item_type)) {
+      ++dropped_items;
+      continue;
+    }
+
+    switch (item_type) {
       case LefParser::lefiGeomLayerE: {
         layer = tech_->findLayer(geometry->getLayer(i));
 
         if (layer == nullptr) {
+          // The geometry that follows, up to the next resolvable LAYER
+          // statement, is dropped.  Everything on layers that do resolve is
+          // still read.  A LEF may legally name a layer type (e.g. an
+          // overlap layer) that the loaded technology never declares.
           logger_->warn(utl::ODB,
                         176,
                         "error: undefined layer ({}) referenced",
                         geometry->getLayer(i));
-          return false;
+          ++unresolved_refs;
+          designRuleWidth = -1;
+          minSpacing = -1;
+          dw = 0;
+          break;
         }
 
         dw = dbdist(layer->getWidth()) >> 1;
@@ -424,7 +471,9 @@ bool lefinReader::addGeoms(dbObject* object,
         if (dbvia == nullptr) {
           logger_->warn(
               utl::ODB, 177, "error: undefined via ({}) referenced", via->name);
-          return false;
+          ++unresolved_refs;
+          ++dropped_items;
+          break;
         }
 
         int x = dbdist(via->x);
@@ -447,7 +496,9 @@ bool lefinReader::addGeoms(dbObject* object,
                         178,
                         "error: undefined via ({}) referenced",
                         viaItr->name);
-          return false;
+          ++unresolved_refs;
+          ++dropped_items;
+          break;
         }
 
         int x = dbdist(viaItr->x);
@@ -487,7 +538,23 @@ bool lefinReader::addGeoms(dbObject* object,
     }
   }
 
-  return true;
+  if (dropped_items > 0) {
+    // Make the geometry loss explicit and quantified.  Without this the only
+    // trace is a single "undefined layer/via" warning that does not say how
+    // much geometry it cost.
+    const std::string master_name
+        = (master_ != nullptr) ? master_->getName() : std::string("<unknown>");
+    logger_->warn(utl::ODB,
+                  1219,
+                  "dropped {} of {} geometry items in the {} of macro {} "
+                  "because they reference an undefined layer or via",
+                  dropped_items,
+                  count,
+                  is_pin ? "PIN geometry" : "OBS section",
+                  master_name);
+  }
+
+  return unresolved_refs == 0;
 }
 
 void lefinReader::createPolygon(dbObject* object,

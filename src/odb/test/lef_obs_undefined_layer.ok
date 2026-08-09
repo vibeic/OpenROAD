@@ -1,0 +1,12 @@
+[INFO ODB-0227] LEF file: data/obs_undefined_layer_tech.lef, created 3 layers
+[WARNING ODB-0176] error: undefined layer (OVERLAP) referenced
+[WARNING ODB-1219] dropped 1 of 66 geometry items in the OBS section of macro blockA because they reference an undefined layer or via
+[WARNING ODB-0176] error: undefined layer (OVERLAP) referenced
+[WARNING ODB-1219] dropped 1 of 67 geometry items in the OBS section of macro blockB because they reference an undefined layer or via
+[WARNING ODB-0176] error: undefined layer (OVERLAP) referenced
+[WARNING ODB-1219] dropped 1 of 66 geometry items in the OBS section of macro blockC because they reference an undefined layer or via
+[WARNING ODB-0177] error: undefined via (undefinedVia) referenced
+[WARNING ODB-1219] dropped 1 of 65 geometry items in the OBS section of macro blockD because they reference an undefined layer or via
+[INFO ODB-0227] LEF file: data/obs_undefined_layer_macro.lef, created 4 library cells
+Summary 9 / 9 (100% pass)
+pass
