@@ -32,6 +32,7 @@ or_integration_tests(
     lef58_backside_bridge
     lef_data_access
     lef_mask
+    lef_obs_undefined_layer
     multi_tech
     ndr
     polygon
