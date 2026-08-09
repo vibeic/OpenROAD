@@ -641,6 +641,16 @@ void WireBuilder::getITermTopLayerRects(odb::dbITerm* iterm,
 
 bool WireBuilder::dbNetIsLocal(odb::dbNet* db_net)
 {
+  // A net with no guides has nothing to build a wire from, and the
+  // "do all the guides share one box" question is vacuously true for an
+  // empty set.  Answer it without touching begin(): dereferencing begin()
+  // on an empty dbSet is a null dereference, and repair_antennas reaches
+  // here with guide-less nets whenever the design was restored from a
+  // routed DEF instead of routed in this session.
+  if (db_net->getGuides().empty()) {
+    return true;
+  }
+
   bool is_local = true;
   odb::Rect last_box = (*(db_net->getGuides().begin()))->getBox();
   for (odb::dbGuide* guide : db_net->getGuides()) {

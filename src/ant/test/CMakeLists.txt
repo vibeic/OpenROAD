@@ -6,5 +6,6 @@ or_integration_tests(
     check_api1
     check_drt1
     check_grt1
+    repair_antennas_no_guides
 )
 

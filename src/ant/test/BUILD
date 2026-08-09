@@ -10,6 +10,7 @@ COMPULSORY_TESTS = [
     "check_api1",
     "check_drt1",
     "check_grt1",
+    "repair_antennas_no_guides",
 ]
 
 ALL_TESTS = COMPULSORY_TESTS
@@ -41,6 +42,10 @@ filegroup(
                 "sw130_random.def",
             ],
             "check_drt1": [
+                "merged_spacing.lef",
+                "sw130_random.def",
+            ],
+            "repair_antennas_no_guides": [
                 "merged_spacing.lef",
                 "sw130_random.def",
             ],

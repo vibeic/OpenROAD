@@ -1,0 +1,22 @@
+[INFO ODB-0227] LEF file: merged_spacing.lef, created 14 layers, 30 vias, 387 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0131]     Created 6 components and 48 component-terminals.
+[INFO ODB-0133]     Created 2 nets and 6 connections.
+guides_present 0
+[WARNING GRT-0300] Timing is not available, setting critical nets percentage to 0.
+[INFO GRT-0012] Found 1 antenna violations.
+[INFO DPL-0006] Core area: 102348.75 um^2
+[INFO DPL-0007] Movable instances area: 0.00 um^2
+[INFO DPL-0008] Fixed instances area within core: 68.73 um^2
+[INFO DPL-0009] Utilization: 0.1%
+[INFO DPL-0005] Diamond search max displacement: +/- 500 sites horizontally, +/- 100 rows vertically.
+[INFO DPL-1102] Legalizing using negotiation legalizer.
+[INFO DPL-1103] Negotiation base search window: +/-20 sites horizontally, +/-5 rows vertically 
+	Automatic search window extension enabled.
+	Search window extendable up to the max displacement cap of +/-500 sites, +/-100 rows near walls.
+[INFO DPL-1104] NegotiationLegalizer DRC penalty: 5.
+[INFO DPL-0392] Negotiation cell height distribution (1 unique row-count(s)):
+[INFO DPL-0393]   height 1 row(s): 7 cells
+[INFO GRT-0015] Inserted 1 diodes.
+repair_antennas_returned 1
+repair_antennas_no_guides: PASS
