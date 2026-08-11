@@ -40,6 +40,7 @@ struct Options
   int halo_x = -1;  // default = 2um
   int halo_y = -1;  // default = 2um
   int row_min_width = -1;
+  int row_min_height = 0;  // 0 = disabled
   // vibeic fork: restrict tapcell insertion to the placed-cell region (+ halo)
   // so a sparse die is not flooded with well-taps over empty silicon.
   bool bound_to_placement = false;
@@ -192,6 +193,7 @@ class Tapcell
                     const InstTree& fixed_instances);
 
   int defaultDistance() const;
+  int maxCoreCellHeight() const;
 
   std::vector<Polygon90> getBoundaryAreas() const;
   std::vector<Edge> getBoundaryEdges(const Polygon& area, bool outer) const;
