@@ -25,6 +25,8 @@ or_integration_tests(
     gcd_em_test_vdd
     gcd_em_density_vdd
     gcd_signal_em
+    gcd_gt2n_backside
+    gcd_gt2n_backside_wo_pins
     gcd_no_vsrc
     gcd_no_vsrc_reuse
     gcd_sizing_vdd
