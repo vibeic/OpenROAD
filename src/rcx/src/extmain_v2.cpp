@@ -136,7 +136,7 @@ void extMain::makeBlockRCsegs_v2(const char* netNames, const char* extRules)
     const uint64_t clamped = resModelClampCount();
     if (clamped > 0) {
       logger_->warn(RCX,
-                    529,
+                    532,
                     "Resistance model had {} out-of-range or missing table "
                     "queries during coupling extraction; each was clamped to "
                     "the nearest valid entry. The extraction model may be "
