@@ -55,6 +55,8 @@ TESTS = [
 
 PASSFAIL_TESTS = [
     "incremental02",
+    "place_ios01",
+    "place_ios_top_layer",
 ]
 
 # Longer-running regression tests (see regression_tests_large.tcl). These are
