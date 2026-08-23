@@ -88,6 +88,27 @@ js_test(
 )
 
 js_test(
+    name = "context_menu_test",
+    data = DOM_TEST_DATA,
+    entry_point = "js/test-context-menu.js",
+    no_copy_to_bin = JS_FILES,
+)
+
+js_test(
+    name = "search_nav_test",
+    data = DOM_TEST_DATA,
+    entry_point = "js/test-search-nav.js",
+    no_copy_to_bin = JS_FILES,
+)
+
+js_test(
+    name = "capture_test",
+    data = DOM_TEST_DATA,
+    entry_point = "js/test-capture.js",
+    no_copy_to_bin = JS_FILES,
+)
+
+js_test(
     name = "websocket_manager_test",
     data = JS_FILES,
     entry_point = "js/test-websocket-manager.js",
@@ -161,6 +182,13 @@ js_test(
     name = "drc_widget_test",
     data = DOM_TEST_DATA,
     entry_point = "js/test-drc-widget.js",
+    no_copy_to_bin = JS_FILES,
+)
+
+js_test(
+    name = "selection_browser_test",
+    data = DOM_TEST_DATA,
+    entry_point = "js/test-selection-browser.js",
     no_copy_to_bin = JS_FILES,
 )
 

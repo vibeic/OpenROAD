@@ -9,6 +9,136 @@ export function isStaticMode(app) {
     return !!app?.websocketManager?.isStaticMode;
 }
 
+// Serialize the layer/selectability visibility flags the way the server
+// parses them: each visibility key as a boolean, each selectability key with
+// an `s_` prefix.  Callers add request-specific fields (visible_layers,
+// selectable_layers, visible_chiplets) on top.  Shared by the tile requests,
+// click-select, and the Save export so the columns can't drift.
+export function buildVisibilityFlags(visibility, selectability) {
+    const vf = {};
+    for (const [k, v] of Object.entries(visibility || {})) {
+        vf[k] = !!v;
+    }
+    for (const [k, v] of Object.entries(selectability || {})) {
+        vf['s_' + k] = !!v;
+    }
+    return vf;
+}
+
+// Sync the client-side selection type flags from a server response so the
+// context menu can enable/disable items by selection type.
+export function applySelectionFlags(app, resp) {
+    if (resp && typeof resp.sel_has_inst === 'boolean') {
+        app.selHasInst = resp.sel_has_inst;
+        app.selHasNet = !!resp.sel_has_net;
+    }
+}
+
+// Transient notice near the bottom of the viewport (e.g. why a property
+// edit was rejected).  Repeated calls replace the current message and
+// restart the timer.
+let toastTimer = null;
+export function showToast(message, durationMs = 4000) {
+    let toast = document.getElementById('or-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'or-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('visible'), durationMs);
+    return toast;
+}
+
+// Themed confirmation dialog.  Resolves true when confirmed, false when
+// cancelled (button, Escape, or clicking outside the box).  Focus starts
+// on Cancel — the safe choice for destructive confirmations.
+export function showConfirmModal({ title, message, confirmLabel = 'OK',
+                                   danger = false }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'or-modal-overlay';
+        const box = document.createElement('div');
+        box.className = 'or-modal';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'or-modal-title';
+        titleEl.textContent = title;
+        const msgEl = document.createElement('div');
+        msgEl.className = 'or-modal-message';
+        msgEl.textContent = message;
+
+        const buttons = document.createElement('div');
+        buttons.className = 'or-modal-buttons';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'or-modal-btn';
+        cancelBtn.textContent = 'Cancel';
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'or-modal-btn'
+            + (danger ? ' or-modal-btn-danger' : '');
+        confirmBtn.textContent = confirmLabel;
+
+        const close = (result) => {
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            resolve(result);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); close(false); }
+        };
+        cancelBtn.addEventListener('click', () => close(false));
+        confirmBtn.addEventListener('click', () => close(true));
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(false);
+        });
+        document.addEventListener('keydown', onKey, true);
+
+        buttons.appendChild(cancelBtn);
+        buttons.appendChild(confirmBtn);
+        box.appendChild(titleEl);
+        box.appendChild(msgEl);
+        box.appendChild(buttons);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        cancelBtn.focus();
+    });
+}
+
+// Coordinate transforms derived from a server bounds response
+// ([[yMin, xMin], [yMax, xMax]], the tile-grid georeference).  Pure so it
+// can be unit-tested; returns null when the design is empty.
+export function computeBoundsTransforms(designBounds, tileSize = 256) {
+    if (!designBounds) return null;
+    const minY = designBounds[0][0];
+    const minX = designBounds[0][1];
+    const maxY = designBounds[1][0];
+    const maxX = designBounds[1][1];
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (!(width > 0) || !(height > 0)) return null;
+    const maxDXDY = Math.max(width, height);
+    const scale = tileSize / maxDXDY;
+    return {
+        scale,
+        maxDXDY,
+        originX: minX,
+        originY: minY,
+        fitBounds: [
+            [-maxDXDY * scale, 0],
+            [(height - maxDXDY) * scale, width * scale],
+        ],
+    };
+}
+
+// True when two bounds responses describe the same rectangle.
+export function boundsEqual(a, b) {
+    return !!a && !!b
+        && a[0][0] === b[0][0] && a[0][1] === b[0][1]
+        && a[1][0] === b[1][0] && a[1][1] === b[1][1];
+}
+
 // --- Selection ownership ---
 //
 // Several panels can replace the selection: the canvas, the Inspector's links
@@ -145,6 +275,53 @@ export function maxUsefulZoom(designScale, maxPxPerDbu = 8) {
     // that one DBU already fills the budget at zoom 0 would otherwise pin the
     // user at the fit zoom with no way to zoom in at all.
     return Math.max(1, Math.min(MAX_TILE_ZOOM, z));
+}
+
+// --- Display units ---
+//
+// Every length the UI shows or accepts is stored in DBU and displayed in
+// whichever unit the "Show DBU" setting (Qt's MainWindow::useDBU) selects.
+// These are pure so the app object, the rulers, the Go-to dialog and their
+// tests all share one implementation instead of each keeping a copy; `opts`
+// is `{ showDbu, dbuPerMicron }`.
+
+// DBU → display string.  Mirrors Qt's MainWindow::convertDBUToString.
+export function formatDbu(value, { showDbu, dbuPerMicron }, addUnits = false) {
+    if (showDbu) return String(Math.round(value));
+    const dbuPerUm = dbuPerMicron > 0 ? dbuPerMicron : 1000;
+    // Enough decimals that two adjacent DBU cannot print the same, which is
+    // ceil() and not round(): at 2000 DBU/µm round() would give 3, and 1 and
+    // 2 DBU would both come out as "0.001".
+    const precision = Math.ceil(Math.log10(dbuPerUm));
+    const um = (value / dbuPerUm).toFixed(precision);
+    return addUnits ? um + ' µm' : um;
+}
+
+// Display string → DBU, the inverse of formatDbu, or null when the text is
+// not a number.  Mirrors Qt's MainWindow::convertStringToDBU.
+export function parseDbu(str, { showDbu, dbuPerMicron }) {
+    const num = parseFloat(str);
+    if (!Number.isFinite(num)) return null;
+    if (showDbu) return Math.round(num);
+    const dbuPerUm = dbuPerMicron > 0 ? dbuPerMicron : 1000;
+    return Math.round(num * dbuPerUm);
+}
+
+// A distance (always positive) with an auto-scaled unit, for the ruler
+// labels.  Unlike formatDbu this always names its unit, because the value
+// appears on the canvas with no column header to carry it.
+export function formatDistance(dbuLength, { showDbu, dbuPerMicron }) {
+    if (showDbu) return String(Math.round(dbuLength));
+    const dbuPerUm = dbuPerMicron > 0 ? dbuPerMicron : 1000;
+    const um = dbuLength / dbuPerUm;
+    if (um >= 1000) return (um / 1000).toFixed(3) + ' mm';
+    if (um >= 1) return um.toFixed(3) + ' um';
+    return (um * 1000).toFixed(1) + ' nm';
+}
+
+// Unit suffix for a field label, e.g. "X (µm)" / "X (DBU)".
+export function unitLabel({ showDbu }) {
+    return showDbu ? 'DBU' : 'µm';
 }
 
 // True for a "#rrggbb" hex color string (the form an <input type="color">

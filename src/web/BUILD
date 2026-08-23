@@ -47,12 +47,16 @@ genrule(
         "src/tcl-completer.js",
         "src/hierarchy-browser.js",
         "src/menu-bar.js",
+        "src/context-menu.js",
+        "src/search-nav.js",
+        "src/capture.js",
         "src/title.js",
         "src/clock-tree-widget.js",
         "src/schematic-widget.js",
         "src/charts-widget.js",
         "src/timing-widget.js",
         "src/drc-widget.js",
+        "src/selection-browser.js",
         "src/main.js",
     ],
     outs = ["src/report_assets.cpp"],
@@ -78,12 +82,16 @@ genrule(
           " $(location src/tcl-completer.js)" +
           " $(location src/hierarchy-browser.js)" +
           " $(location src/menu-bar.js)" +
+          " $(location src/context-menu.js)" +
+          " $(location src/search-nav.js)" +
+          " $(location src/capture.js)" +
           " $(location src/title.js)" +
           " $(location src/clock-tree-widget.js)" +
           " $(location src/schematic-widget.js)" +
           " $(location src/charts-widget.js)" +
           " $(location src/timing-widget.js)" +
           " $(location src/drc-widget.js)" +
+          " $(location src/selection-browser.js)" +
           " $(location src/main.js)",
     tools = [":embed_report_assets"],
 )
@@ -110,6 +118,9 @@ _WEB_ASSET_FILES = [
     "src/tcl-completer.js",
     "src/hierarchy-browser.js",
     "src/menu-bar.js",
+    "src/context-menu.js",
+    "src/search-nav.js",
+    "src/capture.js",
     "src/title.js",
     "src/clock-tree-widget.js",
     "src/schematic-widget.js",
@@ -117,6 +128,7 @@ _WEB_ASSET_FILES = [
     "src/charts-widget.js",
     "src/timing-widget.js",
     "src/drc-widget.js",
+    "src/selection-browser.js",
     "src/main.js",
 ]
 
