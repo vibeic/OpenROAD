@@ -194,6 +194,22 @@ cc_binary(
     copts = OPENROAD_COPTS,
     defines = OPENROAD_DEFINES,
     features = ["-use_header_modules"],
+    # Put the static symbols into .dynsym so the crash handler can NAME frames.
+    #
+    # OpenROAD's SIGSEGV handler prints a boost::stacktrace, whose namer resolves
+    # addresses through dladdr() -- and dladdr reads .dynsym ONLY. This binary is
+    # not stripped and carries 263,620 symbols in .symtab, but without -rdynamic
+    # .dynsym holds just 962, so every application frame prints as a bare
+    # address: "0# 0x0000000002170865 in openroad". Two crash reports
+    # (vibeic/vibeic-eda#146, #147) were filed as un-actionable for exactly this
+    # reason -- the information was in the binary the whole time and the report
+    # could not reach it.
+    #
+    # src/CMakeLists.txt already sets ENABLE_EXPORTS ON with the comment
+    # "Export symbols for stack trace printing", but the shipped image builds
+    # through etc/Build.sh -> Bazel, where that CMake property is dead code.
+    # This is the same intent expressed on the path we actually ship.
+    linkopts = ["-rdynamic"],
     malloc = select({
         "@platforms//os:linux": "@tcmalloc//tcmalloc",
         "@platforms//os:macos": "@bazel_tools//tools/cpp:malloc",
