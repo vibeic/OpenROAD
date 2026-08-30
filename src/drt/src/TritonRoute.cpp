@@ -1262,6 +1262,222 @@ bool findMinAreaPatch(const odb::Rect& pad,
 }
 }  // namespace
 
+// Widen a same-net junction that the GC engine reports as NON-SUFFICIENT METAL.
+//
+// An NS Metal marker says two same-net shapes overlap by less than the layer's
+// MINWIDTH: the metal IS connected, but only through a neck narrower than the
+// process can reliably print. Measured on gf180mcuD, a Via1 Metal1 pad clipping
+// a cell pin at the corner leaves an 80 x 110 dbu junction against a MINWIDTH of
+// 460 -- a real neck, correctly reported.
+//
+// The routing loop does not see these. `FlexGCWorker::Impl::initDesign` returns
+// early for a DR worker before it loads the design's DR objects, so an in-loop
+// worker is paired only against the nets its own worker is modifying; a net
+// finished in an earlier iteration is never re-checked against the fixed cell
+// metal beside it. The loop therefore converges to 0 with these standing, and
+// the whole-design pass in verifyRoute() is the first thing to see them -- which
+// is exactly what DRT-0701 reports.
+//
+// Repair follows patchMinAreaViolations' established shape: run AFTER routing
+// has converged so the ripup loop is never re-entered, and add metal only --
+// a patch on the owning net, never a rip or a reroute. Growing the junction to
+// MINWIDTH in both axes is the physically correct repair: it makes the
+// connection printable without moving anything the router decided.
+//
+// Returns the number of junctions patched.
+int TritonRoute::patchNonSufficientMetalViolations()
+{
+  frDesign* design = getDesign();
+  if (design == nullptr) {
+    return 0;
+  }
+  frTechObject* tech = design->getTech();
+  frBlock* block = design->getTopBlock();
+  frRegionQuery* rq = design->getRegionQuery();
+  if (tech == nullptr || block == nullptr || rq == nullptr) {
+    return 0;
+  }
+  if (block->getGCellPatterns().size() < 2) {
+    return 0;  // no gcell grid: getDRCMarkers cannot tile
+  }
+
+  // See what a whole-design pass sees -- the same view verifyRoute uses, and the
+  // only one in which these markers exist at all.
+  rq->initDRObj();
+  frList<std::unique_ptr<frMarker>> markers;
+  getDRCMarkers(markers, block->getBBox());
+
+  const odb::Rect die = block->getBBox();
+  const frCoord mgrid = std::max<frCoord>(1, tech->getManufacturingGrid());
+
+  std::vector<std::pair<odb::Rect, frNet*>> added_patches;
+  int patched = 0;
+  int unresolved = 0;
+
+  for (const auto& marker : markers) {
+    auto* con = marker->getConstraint();
+    if (con == nullptr
+        || con->typeId()
+               != frConstraintTypeEnum::frcNonSufficientMetalConstraint) {
+      continue;
+    }
+    const frLayerNum lNum = marker->getLayerNum();
+    frLayer* layer = tech->getLayer(lNum);
+    if (layer == nullptr || layer->getType() != dbTechLayerType::ROUTING) {
+      continue;
+    }
+    const frCoord min_width = std::max<frCoord>(1, layer->getMinWidth());
+    frCoord spc = layer->getMinSpacingValue(min_width, min_width, 0, false);
+    if (spc <= 0) {
+      spc = min_width;
+    }
+
+    // NSMetal is same-net by construction, so every src names the one owner.
+    frNet* net = nullptr;
+    for (auto src : marker->getSrcs()) {
+      if (src != nullptr && src->typeId() == frcNet) {
+        net = static_cast<frNet*>(src);
+        break;
+      }
+    }
+    if (net == nullptr || net->isFixed() || net->isSpecial()) {
+      continue;  // nothing this pass may add metal to
+    }
+
+    const odb::Rect neck = marker->getBBox();
+    if (neck.dx() >= min_width && neck.dy() >= min_width) {
+      continue;  // not a neck we can explain; leave it reported
+    }
+
+    // Hard obstacles only: different-net metal and blockages. Same-net metal is
+    // what we are trying to merge into, so it never limits the patch.
+    const frCoord reach = min_width + 2 * spc + 2 * mgrid;
+    const odb::Rect win(neck.xMin() - reach, neck.yMin() - reach,
+                        neck.xMax() + reach, neck.yMax() + reach);
+    std::vector<odb::Rect> hard;
+    frRegionQuery::Objects<frBlockObject> dr_objs, fixed_objs;
+    rq->queryDRObj(win, lNum, dr_objs);
+    rq->query(win, lNum, fixed_objs);
+    auto consider = [&](const odb::Rect& box, frBlockObject* obj) {
+      if (box.xMin() >= box.xMax() || box.yMin() >= box.yMax()) {
+        return;
+      }
+      if (obstacleNet(obj) == net) {
+        return;  // same net: soft, mergeable
+      }
+      hard.push_back(box);
+    };
+    for (const auto& [box, obj] : dr_objs) {
+      consider(box, obj);
+    }
+    for (const auto& [box, obj] : fixed_objs) {
+      consider(box, obj);
+    }
+    for (const auto& [r, r_net] : added_patches) {
+      if (r_net != net && r.intersects(win)) {
+        hard.push_back(r);
+      }
+    }
+
+    // Grow the neck outward until both axes reach MINWIDTH, stopping spc short
+    // of any hard obstacle and inside the die. Symmetric growth keeps the patch
+    // centred on the junction rather than biased into one neighbour.
+    auto room = [&](int axis, int dir) -> frCoord {
+      frCoord limit = (axis == 0)
+                          ? (dir < 0 ? neck.xMin() - die.xMin()
+                                     : die.xMax() - neck.xMax())
+                          : (dir < 0 ? neck.yMin() - die.yMin()
+                                     : die.yMax() - neck.yMax());
+      for (const auto& o : hard) {
+        if (axis == 0) {
+          if (o.yMax() <= neck.yMin() - spc || o.yMin() >= neck.yMax() + spc) {
+            continue;
+          }
+          if (dir < 0 && o.xMax() <= neck.xMin()) {
+            limit = std::min(limit, neck.xMin() - o.xMax() - spc);
+          } else if (dir > 0 && o.xMin() >= neck.xMax()) {
+            limit = std::min(limit, o.xMin() - neck.xMax() - spc);
+          }
+        } else {
+          if (o.xMax() <= neck.xMin() - spc || o.xMin() >= neck.xMax() + spc) {
+            continue;
+          }
+          if (dir < 0 && o.yMax() <= neck.yMin()) {
+            limit = std::min(limit, neck.yMin() - o.yMax() - spc);
+          } else if (dir > 0 && o.yMin() >= neck.yMax()) {
+            limit = std::min(limit, o.yMin() - neck.yMax() - spc);
+          }
+        }
+      }
+      limit = std::max<frCoord>(0, limit);
+      return (limit / mgrid) * mgrid;
+    };
+
+    // The patch must extend a FULL MINWIDTH beyond the junction on every
+    // side, not merely make the junction rectangle minWidth wide. The same-net
+    // skip logic accepts a bridging shape only when its intersection with EACH
+    // neighbour satisfies x^2 + y^2 >= minWidth^2 -- and the first version of
+    // this pass proved why by failing it: a minWidth x minWidth patch centred
+    // on the neck overlapped each neighbour by only ~0.135 x 0.145 um and
+    // MANUFACTURED two new NS Metal markers where it landed (measured:
+    // violations went 2 -> 3). Extending minWidth past the junction guarantees
+    // the intersection with any >= minWidth neighbour is >= minWidth on both
+    // axes: a neighbour shorter than neck + minWidth is covered entirely, and
+    // a longer one yields exactly minWidth of overlap.
+    //
+    // A side that cannot reach the full extension (hard metal or the die edge
+    // in the way) makes the repair unprovable, so the junction is left
+    // reported rather than patched into a new violation.
+    auto up_to_grid = [&](frCoord v) -> frCoord {
+      if (v <= 0) {
+        return 0;
+      }
+      return ((v + mgrid - 1) / mgrid) * mgrid;
+    };
+    const frCoord want = up_to_grid(min_width);
+    const frCoord dxl = std::min(room(0, -1), want);
+    const frCoord dxh = std::min(room(0, 1), want);
+    const frCoord dyl = std::min(room(1, -1), want);
+    const frCoord dyh = std::min(room(1, 1), want);
+    if (dxl < want || dxh < want || dyl < want || dyh < want) {
+      ++unresolved;
+      continue;
+    }
+    const odb::Rect grown(neck.xMin() - dxl, neck.yMin() - dyl,
+                          neck.xMax() + dxh, neck.yMax() + dyh);
+    // Refuse anything degenerate rather than hand it to the database: an
+    // inverted or empty patch box aborts the next GC init, which is a worse
+    // failure than the marker this pass exists to remove.
+    if (grown.xMin() >= grown.xMax() || grown.yMin() >= grown.yMax()
+        || grown.dx() < min_width || grown.dy() < min_width
+        || !die.contains(grown)) {
+      ++unresolved;
+      continue;
+    }
+    auto pwire = std::make_unique<frPatchWire>();
+    // setLayerNum and setOrigin are not optional. initNetsFromDesign computes
+    // `z = pwire->getLayerNum() / 2 - 1` and indexes getNonTaperedRects(z); a
+    // patch left on the default layer 0 gives z = -1 and aborts the next GC
+    // init. Same three calls, same order, as patchMinAreaViolations.
+    pwire->setLayerNum(lNum);
+    pwire->setOrigin(odb::Point(0, 0));
+    pwire->setOffsetBox(grown);
+    net->addPatchWire(std::move(pwire));
+    added_patches.emplace_back(grown, net);
+    ++patched;
+  }
+
+  if (patched > 0 || unresolved > 0) {
+    logger_->info(DRT,
+                  703,
+                  "Post-route non-sufficient-metal repair: widened {} "
+                  "same-net junction(s) to MINWIDTH, {} left unresolved.",
+                  patched,
+                  unresolved);
+  }
+  return patched;
+}
+
 int TritonRoute::patchMinAreaViolations()
 {
   frDesign* design = getDesign();
@@ -1757,6 +1973,10 @@ int TritonRoute::main()
   // the ripup loop. Purely additive metal on the owning signal net.
   if (!router_cfg_->SINGLE_STEP_DR) {
     patchMinAreaViolations();
+    // Same shape, same moment: additive, post-convergence, never re-entering
+    // the ripup loop. verifyRoute() below re-runs the whole-design check and so
+    // is the measurement of whether this repair worked.
+    patchNonSufficientMetalViolations();
     // vibeic fork: verify the FINISHED route before writing it out. Until this
     // ran, the number detailed_route published was the ripup loop's own
     // residual -- measured to disagree with a whole-design pass of the same GC

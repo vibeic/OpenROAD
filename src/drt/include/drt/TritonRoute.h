@@ -188,6 +188,7 @@ class TritonRoute : public PinAccessService
   // rectangle >= min-area. Runs OUTSIDE the ripup loop, so it never re-enters
   // the maze router. Returns the number of polygons patched.
   int patchMinAreaViolations();
+  int patchNonSufficientMetalViolations();
   // vibeic fork: post-route whole-design DRC VERIFICATION.
   //
   // The number detailed_route publishes today is the residual in-loop marker
