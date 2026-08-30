@@ -169,6 +169,84 @@ TEST_F(GCFixture, metal_non_sufficient)
              odb::Rect(0, 0, 50, 50));
 }
 
+// Same-net shapes that share an EDGE are one continuous piece of metal, which
+// is the best connection there is -- not insufficient metal.
+//
+// checkMetalSpacing_main bloats markerRect by 1 dbu on any axis with zero
+// overlap, so a zero-extent rectangle survives boost::polygon's booleans. That
+// bloat is a numerical workaround; measuring it against MINWIDTH reports a
+// 2-dbu neck for metal that has no neck at all. Seen on gf180mcuD as a
+// 0.001 x 0.060 um NS Metal marker -- 230x below Metal1's own MINWIDTH -- on a
+// route whose in-loop count was 0, so post-route verification contradicted the
+// router about geometry neither of them had a problem with.
+TEST_F(GCFixture, metal_same_net_edge_abutment_is_not_insufficient)
+{
+  frNet* n1 = makeNet("n1");
+
+  // The geometry has to keep the two shapes as SEPARATE max-rectangles, or
+  // there is no pair to compare and the check never runs. Collinear segments
+  // of equal width merge into one rectangle, so they prove nothing; the real
+  // case (gf180mcuD, net _0289_) is two rectangles that share a vertical edge
+  // while being OFFSET on the other axis:
+  //
+  //   rect1 x[294180,294940] y[232700,233220]
+  //   rect2 x[294940,295620] y[233100,233810]   <- shares x=294940, offset in y
+  //
+  // Zero overlap in x, 120 dbu of real overlap in y: an edge abutment.
+  // The overlap on the non-abutting axis must also be BELOW minWidth (100 in
+  // this fixture), or skipSameNet's first test already calls the connection
+  // sufficient and nothing is reported either way. The real marker is
+  // dx=2 dy=120 against minWidth=460; dy=60 against 100 is the same ratio.
+  //   seg1  x[0,500]    y[0,500]      (centre 250, width 500)
+  //   seg2  x[500,1000] y[440,940]    (centre 690, width 500)
+  // zero overlap in x -> bloated to 2; 60 dbu of real overlap in y.
+  makePathseg(n1, 2, {0, 250}, {500, 250}, 500);
+  makePathseg(n1, 2, {500, 690}, {1000, 690}, 500);
+
+  runGC();
+
+  EXPECT_EQ(worker.getMarkers().size(), 0);
+}
+
+// The exemption is EDGE-only. Two same-net shapes meeting at a POINT are not
+// continuously connected, so that still reports -- this is the case the
+// pre-existing metal_non_sufficient test covers, asserted here from the other
+// direction so a future widening of the exemption cannot pass silently.
+TEST_F(GCFixture, metal_same_net_corner_touch_still_reports)
+{
+  frNet* n1 = makeNet("n1");
+
+  makePathseg(n1, 2, {0, 0}, {0, 500});
+  makePathseg(n1, 2, {0, 0}, {500, 0});
+
+  runGC();
+
+  auto& markers = worker.getMarkers();
+  EXPECT_EQ(markers.size(), 1);
+  testMarker(markers[0].get(),
+             2,
+             frConstraintTypeEnum::frcNonSufficientMetalConstraint,
+             odb::Rect(0, 0, 50, 50));
+}
+
+// And the exemption is same-net only: two DIFFERENT nets that abut are a short,
+// which is what this function exists to report.
+TEST_F(GCFixture, different_net_edge_abutment_is_still_a_short)
+{
+  frNet* n1 = makeNet("n1");
+  frNet* n2 = makeNet("n2");
+
+  makePathseg(n1, 2, {0, 250}, {500, 250}, 500);
+  makePathseg(n2, 2, {500, 690}, {1000, 690}, 500);
+
+  runGC();
+
+  auto& markers = worker.getMarkers();
+  EXPECT_EQ(markers.size(), 1);
+  EXPECT_EQ(markers[0]->getConstraint()->typeId(),
+            frConstraintTypeEnum::frcShortConstraint);
+}
+
 // Path seg less than min width flags a violation
 using MinCutFixture = FixtureWithParam<std::pair<int, bool>>;
 
