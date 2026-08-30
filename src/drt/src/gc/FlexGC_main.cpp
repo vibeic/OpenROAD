@@ -746,12 +746,37 @@ bool FlexGCWorker::Impl::checkMetalSpacing_short_skipSameNet(
 void FlexGCWorker::Impl::checkMetalSpacing_short(
     gcRect* rect1,
     gcRect* rect2,
-    const gtl::rectangle_data<frCoord>& markerRect)
+    const gtl::rectangle_data<frCoord>& markerRect,
+    const bool rects_abut_edge)
 {
   auto layerNum = rect1->getLayerNum();
   auto net1 = rect1->getNet();
   auto net2 = rect2->getNet();
   if (rect1->isFixed() && rect2->isFixed()) {
+    return;
+  }
+  // SAME-NET EDGE ABUTMENT IS NOT INSUFFICIENT METAL.
+  //
+  // When two rectangles have zero overlap on an axis, checkMetalSpacing_main
+  // bloats markerRect by 1 dbu on that axis -- purely so a zero-extent
+  // rectangle survives boost::polygon's boolean operations, as its own comment
+  // says. That bloat is a numerical workaround, not geometry.
+  //
+  // The NSMetal test below then measures markerRect against MINWIDTH. On a
+  // same-net EDGE abutment it is measuring the workaround: two rectangles that
+  // share an edge form ONE continuous metal region -- the best connection
+  // there is -- and get reported as a 2-dbu neck. Observed on gf180mcuD as a
+  // 0.001 x 0.060 um marker, 230x below Metal1's own MINWIDTH.
+  //
+  // Only EDGE abutment is exempt. A CORNER touch (both axes zero) leaves the
+  // two shapes joined at a point, which is a real connectivity concern, so it
+  // still reports. And the exemption is same-net only: abutting shapes on
+  // DIFFERENT nets are a short, which is what this function reports for them.
+  //
+  // The blockage path already receives this distinction -- checkMetalSpacing_main
+  // computes rects_abut and hands it to checkMetalSpacing_short_obs, which uses
+  // it to accept a legal abutment. This branch was simply never given it.
+  if (net1 == net2 && rects_abut_edge) {
     return;
   }
 
@@ -833,10 +858,13 @@ void FlexGCWorker::Impl::checkMetalSpacing_main(gcRect* rect1,
     if (prlY == 0) {
       gtl::bloat(markerRect, gtl::VERTICAL, 1);
     }
+    // An EDGE abutment has exactly one axis with zero overlap; a CORNER touch
+    // has both. Only the former is continuous metal.
+    const bool rects_abut_edge = (prlX == 0) != (prlY == 0);
     if (rect1->getNet()->isBlockage() || rect2->getNet()->isBlockage()) {
       checkMetalSpacing_short_obs(rect1, rect2, markerRect, rects_abut);
     } else {
-      checkMetalSpacing_short(rect1, rect2, markerRect);
+      checkMetalSpacing_short(rect1, rect2, markerRect, rects_abut_edge);
     }
     // prl
   } else {
