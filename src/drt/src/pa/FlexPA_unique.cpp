@@ -304,18 +304,34 @@ void UniqueInsts::initUniqueInstPinAccess(UniqueClass* unique_class)
   if (unique_class->getInsts().empty()) {
     return;
   }
-  for (auto& term : unique_class->getMaster()->getTerms()) {
+  // The pin-access slot is a property of the CLASS, and
+  // io::Writer::updateDbAccessPoints later applies the index recorded on the
+  // MASTER to every pin of every term of that master. Deriving it from
+  // whichever pin happened to be visited last leaves it out of range for any
+  // pin carrying fewer slots, and a throw out of checkFigsOnGrid (DRT-320) used
+  // to leave some pins grown and the rest not -- a skew that never heals.
+  // So: validate every pin first, then choose one slot, then grow every pin to
+  // it, which restores the invariant updateDbAccessPoints relies on.
+  auto* master = unique_class->getMaster();
+  int pa_idx = 0;
+  for (auto& term : master->getTerms()) {
     for (auto& pin : term->getPins()) {
-      unique_class->setPinAccessIdx(pin->getNumPinAccess());
       checkFigsOnGrid(pin.get());
-      pin->addPinAccess(std::make_unique<frPinAccess>());
+      pa_idx = std::max(pa_idx, pin->getNumPinAccess());
     }
   }
+  for (auto& term : master->getTerms()) {
+    for (auto& pin : term->getPins()) {
+      while (pin->getNumPinAccess() <= pa_idx) {
+        pin->addPinAccess(std::make_unique<frPinAccess>());
+      }
+    }
+  }
+  unique_class->setPinAccessIdx(pa_idx);
 #pragma omp critical
-  unique_class->getMaster()->setHasPinAccessUpdate(
-      unique_class->getPinAccessIdx());
+  master->setHasPinAccessUpdate(pa_idx);
   for (frInst* inst : unique_class->getInsts()) {
-    inst->setPinAccessIdx(unique_class->getPinAccessIdx());
+    inst->setPinAccessIdx(pa_idx);
   }
 }
 
