@@ -467,6 +467,18 @@ int FlexPA::main()
     logger_->info(DRT, 165, "Start pin access.");
   }
 
+  // A detailed_route that throws after pin access -- e.g. DRT-1010 raised from
+  // FlexDR_init on geometry an earlier repair_antennas created -- never reaches
+  // endFR()/io::Writer::updateDbAccessPoints, and that writer is the ONLY place
+  // that clears the per-master updated-PA index set. The frDesign survives the
+  // failed call (TritonRoute::initDesign takes the updateDesign() branch), so
+  // those stale indices would be carried into the next detailed_route and
+  // applied there to pins that never had those slots. The set describes THIS
+  // pin-access run and nothing earlier, so start it empty.
+  for (auto& master : getDesign()->getMasters()) {
+    master->clearUpdatedPAIndices();
+  }
+
   init();
   prep();
 
