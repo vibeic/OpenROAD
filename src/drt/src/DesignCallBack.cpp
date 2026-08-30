@@ -116,6 +116,24 @@ void DesignCallBack::inDbNetDestroy(odb::dbNet* db_net)
   if (net == nullptr) {
     return;
   }
+  // The frNet we are about to mark for deletion owns its routing shapes.
+  // frBlock::removeDeletedObjects() -- called from
+  // TritonRoute::updateDirtyPAData() -- will free them, so they have to leave
+  // the DR-object region query first; otherwise the next
+  // FlexGCWorker::initDesign() queryDRObj() pass calls typeId() on freed
+  // memory (vibeic-eda#146). This mirrors what inDbInstDestroy() already does
+  // for instances via removeBlockObj().
+  if (auto* region_query = design->getRegionQuery()) {
+    for (const auto& shape : net->getShapes()) {
+      region_query->removeDRObj(shape.get());
+    }
+    for (const auto& via : net->getVias()) {
+      region_query->removeDRObj(via.get());
+    }
+    for (const auto& pwire : net->getPatchWires()) {
+      region_query->removeDRObj(pwire.get());
+    }
+  }
   design->getTopBlock()->removeNet(net);
 }
 
