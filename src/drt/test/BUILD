@@ -19,6 +19,8 @@ COMPULSORY_TESTS = [
     "ndr_vias1",
     "ndr_vias2",
     "ndr_vias3",
+    "ns_metal_repair",
+    "ns_metal_repair_blocked",
     "obstruction",
     "pa_single_pin",
     "single_step",

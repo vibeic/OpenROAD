@@ -494,6 +494,22 @@ proc check_drc { args } {
   drt::check_drc_cmd $output_file $x1 $y1 $x2 $y2 $marker_name
 }
 
+sta::define_hidden_cmd_args "repair_ns_metal" {
+    [-output_file filename]
+} ;# checker off
+proc repair_ns_metal { args } {
+  sta::parse_key_args "repair_ns_metal" args \
+    keys { -output_file } \
+    flags {} ;# checker off
+  sta::check_argc_eq0 "repair_ns_metal" $args
+  if { [info exists keys(-output_file)] } {
+    set output_file $keys(-output_file)
+  } else {
+    utl::error DRT 614 "-output_file is required for repair_ns_metal command"
+  }
+  drt::repair_ns_metal_cmd $output_file
+}
+
 proc fix_max_spacing { args } {
   sta::check_argc_eq0 "fix_max_spacing" $args
   drt::fix_max_spacing_cmd

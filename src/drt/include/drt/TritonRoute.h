@@ -189,6 +189,15 @@ class TritonRoute : public PinAccessService
   // the maze router. Returns the number of polygons patched.
   int patchMinAreaViolations();
   int patchNonSufficientMetalViolations();
+  // vibeic fork: run the post-route NS-Metal repair on an ALREADY ROUTED
+  // design and re-verify, without re-entering detailed_route. This is the
+  // only way patchNonSufficientMetalViolations can be regression-tested:
+  // it otherwise runs solely from inside TritonRoute::main(), which needs a
+  // full route. Mirrors checkDRC's setup exactly, then reports before/after
+  // marker counts and writes the SURVIVING markers to `filename`, so a pass
+  // that silently repairs nothing and a pass that manufactures new violations
+  // are both visible in the same output.
+  void repairNonSufficientMetal(const char* filename, int num_threads);
   // vibeic fork: post-route whole-design DRC VERIFICATION.
   //
   // The number detailed_route publishes today is the residual in-loop marker

@@ -2169,6 +2169,83 @@ void TritonRoute::checkDRC(const char* filename,
   reportDRC(filename, markers, marker_name, requiredDrcBox);
 }
 
+// vibeic fork: TEST/DIAGNOSTIC ENTRY POINT for the post-route NS-Metal repair.
+//
+// patchNonSufficientMetalViolations() runs only from inside TritonRoute::main(),
+// after the ripup loop converges. That makes it untestable except through a
+// full detailed_route, and it landed (vibeic/OpenROAD#13) with no regression
+// test at all. This entry point runs the SAME production function against an
+// already-routed design, using checkDRC's setup verbatim, and reports:
+//
+//   before   NS-Metal markers a whole-design pass finds on the input
+//   patched  what the repair says it fixed
+//   after    NS-Metal markers a whole-design pass finds on the RESULT
+//
+// Reporting all three in one line is deliberate. A repair pass that always
+// claims success is the defect one level up, and `patched` alone cannot tell
+// "cleared it" from "moved it": only `after`, measured by the checker rather
+// than by the repair, can. `after > before` means the pass manufactured
+// violations -- which is exactly the v2 failure #13's own commit message
+// records (2 -> 3), and which no test existed to catch.
+//
+// The surviving markers are written to `filename` in the same format checkDRC
+// uses, so a junction the pass correctly REFUSES to repair stays visible and
+// diffable rather than disappearing into a count.
+void TritonRoute::repairNonSufficientMetal(const char* filename,
+                                           int num_threads)
+{
+  router_cfg_->GC_IGNORE_PDN_LAYER_NUM = -1;
+  router_cfg_->REPAIR_PDN_LAYER_NUM = -1;
+  router_cfg_->MAX_THREADS = num_threads;
+  initDesign();
+  auto gcellGrid = db_->getChip()->getBlock()->getGCellGrid();
+  if (gcellGrid != nullptr && gcellGrid->getNumGridPatternsX() == 1
+      && gcellGrid->getNumGridPatternsY() == 1) {
+    io::GuideProcessor guide_processor(
+        getDesign(), db_, logger_, router_cfg_.get());
+    guide_processor.readGuides();
+    guide_processor.buildGCellPatterns();
+  } else if (!initGuide()) {
+    logger_->error(DRT, 705, "GCELLGRID is undefined");
+  }
+
+  const odb::Rect box = design_->getTopBlock()->getBBox();
+
+  auto count_ns_metal = [](const frList<std::unique_ptr<frMarker>>& ms) {
+    int n = 0;
+    for (const auto& m : ms) {
+      auto* con = m->getConstraint();
+      if (con != nullptr
+          && con->typeId()
+                 == frConstraintTypeEnum::frcNonSufficientMetalConstraint) {
+        ++n;
+      }
+    }
+    return n;
+  };
+
+  design_->getRegionQuery()->initDRObj();
+  frList<std::unique_ptr<frMarker>> before;
+  getDRCMarkers(before, box);
+  const int n_before = count_ns_metal(before);
+
+  const int patched = patchNonSufficientMetalViolations();
+
+  design_->getRegionQuery()->initDRObj();
+  frList<std::unique_ptr<frMarker>> after;
+  getDRCMarkers(after, box);
+  const int n_after = count_ns_metal(after);
+
+  logger_->info(DRT,
+                704,
+                "NS-Metal repair check: before={} patched={} after={}.",
+                n_before,
+                patched,
+                n_after);
+
+  reportDRC(filename, after, "DRC", box);
+}
+
 void TritonRoute::addUserSelectedVia(const std::string& viaName)
 {
   if (db_->getChip() == nullptr || db_->getChip()->getBlock() == nullptr
