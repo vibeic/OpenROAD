@@ -447,6 +447,21 @@ void FlexDRWorker::endAddNets_merge(
         style.setBeginStyle(style_1.getBeginStyle(), style_1.getBeginExt());
       }
       rptr->setStyle(style);
+      // ordrv3 probe, MEASUREMENT ONLY: this rewrite happens AFTER this
+      // worker's
+      // GC has run. Compare the merged segment against the union of what it
+      // replaces; a difference means the design written out is not the geometry
+      // any worker checked. See GcVisibilityStats::recordMerge.
+      if (gc_visibility_ != nullptr) {
+        odb::Rect merged_union = horzPathSegs[0]->getBBox();
+        merged_union.merge(horzPathSegs[1]->getBBox());
+        const odb::Rect merged_box = rptr->getBBox();
+        gc_visibility_->recordMerge(
+            horzPathSegs[0]->getStyle().getWidth()
+                != horzPathSegs[1]->getStyle().getWidth(),
+            !merged_union.contains(merged_box),
+            !merged_box.contains(merged_union));
+      }
       if (save_updates_) {
         drUpdate update1(drUpdate::REMOVE_FROM_NET),
             update2(drUpdate::REMOVE_FROM_NET);
@@ -489,6 +504,21 @@ void FlexDRWorker::endAddNets_merge(
         style.setBeginStyle(style_1.getBeginStyle(), style_1.getBeginExt());
       }
       rptr->setStyle(style);
+      // ordrv3 probe, MEASUREMENT ONLY: this rewrite happens AFTER this
+      // worker's
+      // GC has run. Compare the merged segment against the union of what it
+      // replaces; a difference means the design written out is not the geometry
+      // any worker checked. See GcVisibilityStats::recordMerge.
+      if (gc_visibility_ != nullptr) {
+        odb::Rect merged_union = vertPathSegs[0]->getBBox();
+        merged_union.merge(vertPathSegs[1]->getBBox());
+        const odb::Rect merged_box = rptr->getBBox();
+        gc_visibility_->recordMerge(
+            vertPathSegs[0]->getStyle().getWidth()
+                != vertPathSegs[1]->getStyle().getWidth(),
+            !merged_union.contains(merged_box),
+            !merged_box.contains(merged_union));
+      }
       if (save_updates_) {
         drUpdate update1(drUpdate::REMOVE_FROM_NET),
             update2(drUpdate::REMOVE_FROM_NET);

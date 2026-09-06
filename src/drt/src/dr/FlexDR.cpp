@@ -667,10 +667,13 @@ void FlexDR::reportMarkerWriteback(int num_workers) const
   }
   logger_->debug(DRT,
                  "verifysplit",
-                 "WRITEBACK iter={} workers={} removed={} written={} "
+                 "WRITEBACK iter={} workers={} setmarkers_kept={} "
+                 "setmarkers_dropped={} removed={} written={} "
                  "dropped_outside_drcbox={} block_markers={}",
                  iter_,
                  num_workers,
+                 gc_visibility_.setmarkers_kept.load(),
+                 gc_visibility_.setmarkers_dropped.load(),
                  gc_visibility_.markers_removed.load(),
                  gc_visibility_.markers_written.load(),
                  gc_visibility_.markers_dropped_outside_drcbox.load(),
@@ -680,6 +683,24 @@ void FlexDR::reportMarkerWriteback(int num_workers) const
 // vibeic fork: report what -report_unowned_gc_objects counted. Emitted ONLY
 // when the switch is on, so with it off not one byte of the log moves, and
 // even at VERBOSE 0: a run that asks for a measurement is entitled to it.
+// ordrv3 probe: MEASUREMENT ONLY, debug-gated.
+// See GcVisibilityStats::recordMerge.
+void FlexDR::reportMergeProbe() const
+{
+  if (!logger_->debugCheck(DRT, "mergeprobe", 1)) {
+    return;
+  }
+  logger_->debug(DRT,
+                 "mergeprobe",
+                 "MERGEPROBE merges={} width_mismatch={} grew={} shrank={} "
+                 "geometry_changed={}",
+                 gc_visibility_.merges.load(),
+                 gc_visibility_.merges_width_mismatch.load(),
+                 gc_visibility_.merges_grew.load(),
+                 gc_visibility_.merges_shrank.load(),
+                 gc_visibility_.merges_moved.load());
+}
+
 void FlexDR::reportGcVisibility() const
 {
   if (!router_cfg_->REPORT_UNOWNED_GC_OBJECTS) {
@@ -2239,6 +2260,7 @@ int FlexDR::main()
   end(/* done */ true);
   reporter->end(true);
   reportGcVisibility();
+  reportMergeProbe();
 
   if (!router_cfg_->GUIDE_REPORT_FILE.empty()) {
     reportGuideCoverage();
