@@ -667,11 +667,19 @@ void FlexDR::reportMarkerWriteback(int num_workers) const
   }
   logger_->debug(DRT,
                  "verifysplit",
-                 "WRITEBACK iter={} workers={} setmarkers_kept={} "
+                 "WRITEBACK iter={} workers={} rqi_markers={} rqi_aggr={} "
+                 "rq_markers={} rq_aggr={} "
+                 "rq_vict={} rq_movable_nets={} setmarkers_kept={} "
                  "setmarkers_dropped={} removed={} written={} "
                  "dropped_outside_drcbox={} block_markers={}",
                  iter_,
                  num_workers,
+                 gc_visibility_.rqi_markers.load(),
+                 gc_visibility_.rqi_markers_with_aggressors.load(),
+                 gc_visibility_.rq_markers.load(),
+                 gc_visibility_.rq_markers_with_aggressors.load(),
+                 gc_visibility_.rq_markers_with_victims.load(),
+                 gc_visibility_.rq_movable_aggressor_nets.load(),
                  gc_visibility_.setmarkers_kept.load(),
                  gc_visibility_.setmarkers_dropped.load(),
                  gc_visibility_.markers_removed.load(),

@@ -2309,6 +2309,13 @@ void FlexDRWorker::route_queue_init_queue(
 
   if (getRipupMode() == RipUpMode::DRC) {
     for (auto& marker : markers_) {
+      // ordrv4 probe: markers_ is the COPIED set (FlexDRWorker::setMarkers
+      // copy-constructs into a std::vector<frMarker>), so this entry point is
+      // the one the frMarker copy constructor can starve.
+      if (gc_visibility_ != nullptr) {
+        gc_visibility_->recordRouteQueueInitMarker(
+            !marker.getAggressors().empty());
+      }
       route_queue_update_from_marker(
           &marker, uniqueVictims, uniqueAggressors, checks, routes, nullptr);
     }
@@ -2484,6 +2491,13 @@ void FlexDRWorker::route_queue_update_from_marker(
     }
   }
 
+  // ordrv4 probe, MEASUREMENT ONLY: see
+  // GcVisibilityStats::recordRouteQueueMarker.
+  if (gc_visibility_ != nullptr) {
+    gc_visibility_->recordRouteQueueMarker(!markerAggressors.empty(),
+                                           !marker->getVictims().empty(),
+                                           movableAggressorNets.size());
+  }
   // push movable aggressors for reroute and other srcs for drc checking
   bool hasRerouteNet = false;
   if (!movableAggressorNets.empty()) {
