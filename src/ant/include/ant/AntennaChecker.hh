@@ -35,6 +35,11 @@ class AntennaChecker
                     int num_threads = 1,
                     bool verbose = false);
   int antennaViolationCount() const;
+  // The nets the most recent checkAntennas() reported as violating, in
+  // ascending dbNet id order so the answer is a stable SET, not a count.
+  // A caller that only has the count cannot tell "the same two nets are
+  // still bad" from "two different nets are now bad".
+  std::vector<odb::dbNet*> violatingNets();
   Violations getAntennaViolations(odb::dbNet* net,
                                   odb::dbMTerm* diode_mterm,
                                   float ratio_margin);

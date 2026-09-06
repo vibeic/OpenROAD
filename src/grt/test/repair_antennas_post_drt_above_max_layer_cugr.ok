@@ -14,6 +14,7 @@ moved bterm req_msg[0] from met3 to met4
     default via: M3M4_PR
   Layer via4
     default via: M4M5_PR
+[INFO DRT-0700] Post-route min-area repair: patched 2 isolated undersized polygon(s); 0 unresolved.
 [INFO ANT-0002] Found 3 net violations.
 [INFO ANT-0001] Found 3 pin violations.
 [DEBUG GRT-repair_antennas] Demand adoption: 410 nets from wires, 1 from guides, 0 failed
@@ -34,5 +35,6 @@ moved bterm req_msg[0] from met3 to met4
 [INFO DPL-0392] Negotiation cell height distribution (1 unique row-count(s)):
 [INFO DPL-0393]   height 1 row(s): 1363 cells
 [INFO GRT-0015] Inserted 3 diodes.
+[WARNING ANT-0018] 3 net(s) with a gate and no routing were NOT checked and are absent from the counts below, which is not the same as clean: clk req_msg[11] req_msg[23]
 [INFO ANT-0002] Found 0 net violations.
 [INFO ANT-0001] Found 0 pin violations.

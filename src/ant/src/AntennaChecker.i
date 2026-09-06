@@ -20,6 +20,7 @@ odb::dbDatabase *getDb();
 %}
 
 %include "../../Exception.i"
+%include "std_string.i"
 
 %inline %{
 
@@ -46,6 +47,23 @@ int
 antenna_violation_count()
 {
   return getAntennaChecker()->antennaViolationCount();
+}
+
+// The nets the last check_antennas() reported as violating, newline-joined.
+// Newline cannot occur in a DEF/LEF name, so the Tcl caller gets a list with
+// `split $s "\n"` and no quoting hazard -- net names here routinely contain
+// [ ] { } (bus bits), which a space-joined string could not survive.
+std::string
+antenna_violating_nets()
+{
+  std::string names;
+  for (odb::dbNet* net : getAntennaChecker()->violatingNets()) {
+    if (!names.empty()) {
+      names += "\n";
+    }
+    names += net->getConstName();
+  }
+  return names;
 }
 
 // check a net for antenna violations

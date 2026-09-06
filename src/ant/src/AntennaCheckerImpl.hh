@@ -71,6 +71,10 @@ struct NodeInfo
 struct ViolationReport
 {
   bool violated;
+  // Set when the net violates on a node whose iterm_diff_area is zero --
+  // i.e. no diffusion area at all reaches the conductor that violates.
+  // Diodes already on the net are then inert for THIS violation.
+  bool violated_with_no_diff_area{false};
   std::string report;
   ViolationReport() { violated = false; }
 };
@@ -90,6 +94,7 @@ class AntennaChecker::Impl
   // net nullptr -> check all nets
   int checkAntennas(odb::dbNet* net, int num_threads, bool verbose);
   int antennaViolationCount() const;
+  std::vector<odb::dbNet*> violatingNets();
   Violations getAntennaViolations(odb::dbNet* net,
                                   odb::dbMTerm* diode_mterm,
                                   float ratio_margin);
@@ -112,6 +117,12 @@ class AntennaChecker::Impl
   std::vector<std::pair<double, std::vector<odb::dbITerm*>>>
   getViolatedWireLength(odb::dbNet* net, int routing_level);
   bool isValidGate(odb::dbMTerm* mterm);
+  // Names the nets checkAntennas() could not measure, so "0 violations"
+  // cannot be read as "clean" when the routing simply is not there.
+  void reportUncheckableNets(odb::dbNet* checked_net, bool use_grt_routes);
+  // Names nets carrying antenna diodes that reach no violating conductor,
+  // so a repair pass adding another one cannot help.
+  void reportInertDiodes();
   void buildLayerMaps(odb::dbNet* net, LayerToGraphNodes& node_by_layer_map);
   int checkNet(odb::dbNet* net,
                bool verbose,
