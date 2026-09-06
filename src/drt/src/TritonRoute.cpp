@@ -2476,6 +2476,8 @@ void TritonRoute::setParams(const ParamStruct& params)
   router_cfg_->REPAIR_PDN_LAYER_NAME = params.repairPDNLayerName;
   router_cfg_->MAX_THREADS = params.num_threads;
   router_cfg_->REPORT_UNOWNED_GC_OBJECTS = params.reportUnownedGcObjects;
+  router_cfg_->GC_VERIFY_CHECKNDR = params.gcVerifyCheckNdr;
+  router_cfg_->GC_INLOOP_NO_CHECKNDR = params.gcInloopNoCheckNdr;
 }
 
 void TritonRoute::addWorkerResults(

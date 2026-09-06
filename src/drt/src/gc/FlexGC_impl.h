@@ -187,6 +187,9 @@ class FlexGCWorker::Impl
   // whole-design asymmetry can be measured rather than argued. Costs one
   // region query per worker and only when `-debug_level DRT gcinit 1` is set.
   void logDesignObjCoverage(const frDesign* design);
+  // vibeic fork: the in-loop / whole-design checkNDRs asymmetry, and the two
+  // measurement switches that can cancel it. See checkMetalSpacing.
+  bool checkMetalSpacing_checkNDRs() const;
   void initDRWorker();
   void initNets();
   void initNet(gcNet* net);

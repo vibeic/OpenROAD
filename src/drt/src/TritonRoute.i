@@ -67,7 +67,9 @@ void detailed_route_cmd(const char* outputMazeFile,
                         bool saveGuideUpdates,
                         const char* repairPDNLayerName,
                         int drcReportIterStep,
-                        bool reportUnownedGcObjects)
+                        bool reportUnownedGcObjects,
+                        bool gcVerifyCheckNdr,
+                        bool gcInloopNoCheckNdr)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   const int num_threads = ord::OpenRoad::openRoad()->getThreadCount();
@@ -91,7 +93,9 @@ void detailed_route_cmd(const char* outputMazeFile,
                     saveGuideUpdates,
                     repairPDNLayerName,
                     num_threads,
-                    reportUnownedGcObjects});
+                    reportUnownedGcObjects,
+                    gcVerifyCheckNdr,
+                    gcInloopNoCheckNdr});
   router->main();
   router->setDistributed(false);
 }

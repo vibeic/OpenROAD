@@ -81,6 +81,8 @@ struct ParamStruct
   // vibeic fork: -report_unowned_gc_objects. Declared LAST so the positional
   // brace initialisation in TritonRoute.i keeps its existing order.
   bool reportUnownedGcObjects = false;
+  bool gcVerifyCheckNdr = false;
+  bool gcInloopNoCheckNdr = false;
 };
 
 class TritonRoute : public PinAccessService

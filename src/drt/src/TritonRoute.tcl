@@ -38,7 +38,8 @@ proc detailed_route { args } {
       -top_routing_layer -verbose -remote_host -remote_port -shared_volume \
       -cloud_size -min_access_points -repair_pdn_vias -drc_report_iter_step} \
     flags {-disable_via_gen -distributed -clean_patches -no_pin_access \
-           -single_step_dr -save_guide_updates -report_unowned_gc_objects}
+           -single_step_dr -save_guide_updates -report_unowned_gc_objects \
+           -gc_verify_checkndr -gc_inloop_no_checkndr}
   sta::check_argc_eq0 "detailed_route" $args
 
   set enable_via_gen [expr ![info exists flags(-disable_via_gen)]]
@@ -56,6 +57,13 @@ proc detailed_route { args } {
   # COMMAND, not one flag of an existing one, so this is how a flag is hidden.
   set report_unowned_gc_objects \
     [expr [info exists flags(-report_unowned_gc_objects)]]
+  # vibeic fork, MEASUREMENT ONLY, hidden for the same reason as the switch
+  # above: give the whole-design GC pass the in-loop checkNDRs value, or the
+  # in-loop passes the whole-design one, and see whether the two passes stop
+  # disagreeing. Not user options.
+  set gc_verify_checkndr [expr [info exists flags(-gc_verify_checkndr)]]
+  set gc_inloop_no_checkndr \
+    [expr [info exists flags(-gc_inloop_no_checkndr)]]
 
   if { [info exists keys(-repair_pdn_vias)] } {
     set repair_pdn_vias $keys(-repair_pdn_vias)
@@ -175,7 +183,7 @@ proc detailed_route { args } {
     $via_access_layer $or_seed $or_k $verbose \
     $clean_patches $no_pin_access $single_step_dr $min_access_points \
     $save_guide_updates $repair_pdn_vias $drc_report_iter_step \
-    $report_unowned_gc_objects
+    $report_unowned_gc_objects $gc_verify_checkndr $gc_inloop_no_checkndr
 }
 
 proc detailed_route_num_drvs { args } {
