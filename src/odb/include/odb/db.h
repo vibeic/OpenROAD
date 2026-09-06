@@ -3812,13 +3812,25 @@ class dbWire : public dbObject
   ///
   static void destroy(dbWire* wire);
 
+  ///
+  /// Append one raw (opcode, data) entry to this wire.
+  ///
+  /// This is the write half of the raw accessors length()/getOpcode()/
+  /// getData(): replaying a stream read back through those onto a freshly
+  /// created wire of the SAME block reproduces the original wire exactly.
+  /// It is how a caller saves and restores routing without re-encoding it
+  /// (grt::RoutedStateSnapshot). It appends verbatim and validates nothing,
+  /// so it is only for replaying a stream odb itself produced -- to BUILD a
+  /// wire from geometry, use dbWireEncoder.
+  ///
+  void addOneSeg(unsigned char op, int value);
+
  private:
   void addOneSeg(unsigned char op,
                  int value,
                  uint32_t jj,
                  int* did,
                  dbRSeg** new_rsegs);
-  void addOneSeg(unsigned char op, int value);
 
   friend class dbNet;
 };

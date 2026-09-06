@@ -35,6 +35,7 @@
 #include "Net.h"
 #include "Pin.h"
 #include "RepairAntennas.h"
+#include "RoutedStateSnapshot.h"
 #include "RoutingTracks.h"
 #include "boost/icl/interval.hpp"
 #include "boost/polygon/polygon.hpp"
@@ -820,6 +821,34 @@ int GlobalRouter::repairAntennas(odb::dbMTerm* diode_mterm,
 
   logger_->metric("antenna_diodes_count", total_diodes_count_);
   return total_diodes_count_;
+}
+
+// Routed-state snapshot, used by `repair_antennas -reroute` so the loop can
+// end on the BEST state it saw rather than on the last one it happened to
+// produce. The block is taken from the db rather than from block_ so a
+// caller can snapshot before the router has been initialized.
+void GlobalRouter::takeRoutedStateSnapshot()
+{
+  routed_state_snapshot_ = std::make_unique<RoutedStateSnapshot>(
+      db_->getChip()->getBlock(), logger_);
+}
+
+bool GlobalRouter::hasRoutedStateSnapshot() const
+{
+  return routed_state_snapshot_ != nullptr;
+}
+
+bool GlobalRouter::restoreRoutedStateSnapshot()
+{
+  if (routed_state_snapshot_ == nullptr) {
+    logger_->error(GRT, 317, "No routed-state snapshot to restore.");
+  }
+  return routed_state_snapshot_->restore();
+}
+
+void GlobalRouter::discardRoutedStateSnapshot()
+{
+  routed_state_snapshot_.reset();
 }
 
 NetRouteMap GlobalRouter::findRouting(std::vector<Net*>& nets,

@@ -82,6 +82,11 @@ int AntennaChecker::antennaViolationCount() const
   return impl_->antennaViolationCount();
 }
 
+std::vector<odb::dbNet*> AntennaChecker::violatingNets()
+{
+  return impl_->violatingNets();
+}
+
 Violations AntennaChecker::getAntennaViolations(odb::dbNet* net,
                                                 odb::dbMTerm* diode_mterm,
                                                 float ratio_margin)
@@ -942,6 +947,9 @@ int AntennaChecker::Impl::checkGates(odb::dbNet* db_net,
           pin_has_violation = true;
           gates_with_violations[node].insert(layer);
           net_report.violated = true;
+          if (node_info.iterm_diff_area == 0.0) {
+            net_report.violated_with_no_diff_area = true;
+          }
         }
       }
     }
@@ -1301,6 +1309,9 @@ int AntennaChecker::Impl::checkAntennas(odb::dbNet* net,
     printReport(net);
   }
 
+  reportUncheckableNets(net, use_grt_routes);
+  reportInertDiodes();
+
   logger_->info(utl::ANT, 2, "Found {} net violations.", net_violation_count);
   logger_->metric("antenna__violating__nets", net_violation_count);
   logger_->info(utl::ANT, 1, "Found {} pin violations.", pin_violation_count);
@@ -1319,9 +1330,157 @@ int AntennaChecker::Impl::checkAntennas(odb::dbNet* net,
   return net_violation_count;
 }
 
+// A net with NO routing cannot violate, so it silently drops out of the
+// count above. That is not the same thing as clean, and the difference is
+// not academic: `repair_antennas` without a follow-up reroute deletes the
+// detailed wire of every net it inserted a diode on, and the very next
+// check_antennas then reports zero -- measured on a 15,690-instance design,
+// where three genuinely violating nets became "0 net violations" purely
+// because their wire was gone. Nothing in the output said so.
+//
+// Reported ONLY on the detailed-routing path. On the global-route path the
+// checker builds synthetic wires from guides and WireBuilder deliberately
+// skips nets that are local to one gcell, connected by abutment, or
+// single-terminal; those have no global route to build from and are a
+// legitimate, documented skip. Measured on gcd: reporting them anyway named
+// 37 of 411 nets, a false-alarm rate that teaches a reader to ignore the
+// message. (My first predicate for this was "has guides but no wire" and it
+// was WRONG -- after global_route all 411 nets have guides and none has a
+// wire, so it narrowed nothing. The census is in ant18probe.tcl.)
+void AntennaChecker::Impl::reportUncheckableNets(odb::dbNet* checked_net,
+                                                 bool use_grt_routes)
+{
+  if (use_grt_routes) {
+    return;
+  }
+  std::vector<odb::dbNet*> unrouted;
+  for (odb::dbNet* net : block_->getNets()) {
+    if (net->isSpecial() || (checked_net != nullptr && net != checked_net)) {
+      continue;
+    }
+    if (net->getWire() != nullptr) {
+      continue;
+    }
+    const int connections
+        = net->getITerms().size() + net->getBTerms().size();
+    if (connections < 2) {
+      continue;
+    }
+    bool drives_a_gate = false;
+    for (odb::dbITerm* iterm : net->getITerms()) {
+      if (isValidGate(iterm->getMTerm())) {
+        drives_a_gate = true;
+        break;
+      }
+    }
+    if (drives_a_gate) {
+      unrouted.push_back(net);
+    }
+  }
+  if (unrouted.empty()) {
+    return;
+  }
+  std::sort(unrouted.begin(), unrouted.end(), [](odb::dbNet* a, odb::dbNet* b) {
+    return a->getId() < b->getId();
+  });
+  constexpr size_t kMaxNamed = 10;
+  std::string names;
+  for (size_t i = 0; i < unrouted.size() && i < kMaxNamed; i++) {
+    if (i > 0) {
+      names += " ";
+    }
+    names += unrouted[i]->getConstName();
+  }
+  if (unrouted.size() > kMaxNamed) {
+    names += fmt::format(" ... and {} more", unrouted.size() - kMaxNamed);
+  }
+  logger_->warn(utl::ANT,
+                18,
+                "{} net(s) with a gate and no routing were NOT checked and "
+                "are absent from the counts below, which is not the same as "
+                "clean: {}",
+                unrouted.size(),
+                names);
+}
+
+// A diode only drains the conductor it is attached to. When a net violates
+// on a node that has NO diffusion area at all, every antenna diode already
+// on that net is inert for that violation -- and the repair pass will still
+// insert another one, because the count it computes comes from a model that
+// ADDS the diode area to the violating node rather than from where the diode
+// actually lands. Measured on a 15,690-instance design: one net carried
+// SEVEN diodes and its Metal2 side-area ratio was 1119 against a limit of
+// 400, unchanged; disconnecting all seven moved that number by nothing,
+// while it did move the Metal3/Metal4 numbers, so the disconnect was real.
+// Nothing in the output said the diodes were not helping.
+void AntennaChecker::Impl::reportInertDiodes()
+{
+  std::vector<std::string> messages;
+  {
+    absl::MutexLock lock(&map_mutex_);
+    for (const auto& [net, violation_report] : net_to_report_) {
+      if (!violation_report.violated
+          || !violation_report.violated_with_no_diff_area) {
+        continue;
+      }
+      int diodes = 0;
+      for (odb::dbITerm* iterm : net->getITerms()) {
+        if (iterm->getInst()->getMaster()->getType()
+            == odb::dbMasterType::CORE_ANTENNACELL) {
+          diodes++;
+        }
+      }
+      if (diodes > 0) {
+        messages.push_back(fmt::format("{} ({} diode(s))", net->getConstName(), diodes));
+      }
+    }
+  }
+  if (messages.empty()) {
+    return;
+  }
+  std::string joined;
+  for (const std::string& message : messages) {
+    if (!joined.empty()) {
+      joined += ", ";
+    }
+    joined += message;
+  }
+  logger_->warn(utl::ANT,
+                19,
+                "{} net(s) violate on a conductor that no diffusion area "
+                "reaches, so the diodes already on them do not help and "
+                "another one would not either: {}",
+                messages.size(),
+                joined);
+}
+
 int AntennaChecker::Impl::antennaViolationCount() const
 {
   return net_violation_count_;
+}
+
+// The identities behind antennaViolationCount(). checkAntennas() already
+// records a per-net ViolationReport whose `violated` flag is exactly the
+// predicate that produced the count; this hands the caller the SET so it
+// can compare membership across runs instead of comparing two integers
+// that can be equal for entirely different nets.
+std::vector<odb::dbNet*> AntennaChecker::Impl::violatingNets()
+{
+  std::vector<odb::dbNet*> nets;
+  {
+    absl::MutexLock lock(&map_mutex_);
+    for (const auto& [net, violation_report] : net_to_report_) {
+      if (violation_report.violated) {
+        nets.push_back(net);
+      }
+    }
+  }
+  // PtrMap iteration order is an implementation detail; sort so the set is
+  // reported the same way on every run and on every host.
+  std::sort(nets.begin(), nets.end(), [](odb::dbNet* a, odb::dbNet* b) {
+    return a->getId() < b->getId();
+  });
+  return nets;
 }
 
 bool AntennaChecker::Impl::haveRoutedNets()
