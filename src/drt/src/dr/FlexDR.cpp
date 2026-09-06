@@ -659,6 +659,27 @@ void printIterationProgress(utl::Logger* logger,
 // vibeic fork: say what -gc_sees_routed actually did. Emitted ONLY when the
 // flag is on, so with it off not one byte of the log moves. Reported even at
 // VERBOSE 0: a run that opts into an experiment is entitled to its result.
+// vibeic fork: MEASUREMENT ONLY, debug-gated. What the LAST iteration's workers
+// saw and then did not write back, because endAddMarkers keeps only what
+// intersects drcBox (routeBox + DRCSAFEDIST) while the GC checked extBox
+// (routeBox + MTSAFEDIST).
+void FlexDR::reportMarkerWriteback(int num_workers) const
+{
+  if (!logger_->debugCheck(DRT, "verifysplit", 1)) {
+    return;
+  }
+  logger_->debug(DRT,
+                 "verifysplit",
+                 "WRITEBACK iter={} workers={} removed={} written={} "
+                 "dropped_outside_drcbox={} block_markers={}",
+                 iter_,
+                 num_workers,
+                 gc_visibility_.markers_removed.load(),
+                 gc_visibility_.markers_written.load(),
+                 gc_visibility_.markers_dropped_outside_drcbox.load(),
+                 getDesign()->getTopBlock()->getNumMarkers());
+}
+
 void FlexDR::reportGcVisibility() const
 {
   if (!router_cfg_->GC_SEES_ROUTED) {
@@ -1541,6 +1562,9 @@ void FlexDR::optimizationFlow(const SearchRepairArgs& args,
 
 void FlexDR::searchRepair(const SearchRepairArgs& args)
 {
+  // vibeic fork, measurement only: keep the writeback counters describing the
+  // LAST iteration, which is the one whose route is published.
+  gc_visibility_.resetWriteback();
   // Calculate flow state
   const auto flow_state = flow_state_machine_->determineNextFlow(
       {.num_violations = getDesign()->getTopBlock()->getNumMarkers(),
@@ -1609,6 +1633,7 @@ void FlexDR::searchRepair(const SearchRepairArgs& args)
              "Number of work units = {}.",
              numWorkUnits_);
   reportIterationViolations();
+  reportMarkerWriteback(iter_prog.total_num_workers);
   if (router_cfg_->VERBOSE > 0) {
     iter_prog.time.print(logger_);
     std::cout << std::flush;

@@ -630,6 +630,12 @@ void FlexDRWorker::endRemoveMarkers(frDesign* design)
   auto topBlock = design->getTopBlock();
   std::vector<frMarker*> result;
   regionQuery->queryMarker(getDrcBox(), result);
+  // vibeic fork, MEASUREMENT ONLY: every worker DELETES the block's markers in
+  // its drcBox before adding its own, and drcBoxes of adjacent workers overlap
+  // by DRCSAFEDIST on each side. Count the deletions next to the additions.
+  if (gc_visibility_ != nullptr) {
+    gc_visibility_->recordRemovals(result.size());
+  }
   for (auto mptr : result) {
     if (save_updates_) {
       drUpdate update(drUpdate::REMOVE_FROM_BLOCK);
@@ -645,9 +651,15 @@ void FlexDRWorker::endAddMarkers(frDesign* design)
 {
   auto regionQuery = design->getRegionQuery();
   auto topBlock = design->getTopBlock();
+  // vibeic fork, MEASUREMENT ONLY: this worker's GC checked extBox but only
+  // what intersects drcBox is written back. Count both sides. See
+  // GcVisibilityStats and `-debug_level DRT verifysplit 1`.
+  uint64_t written = 0;
+  uint64_t dropped = 0;
   // for (auto &m: getMarkers()) {
   for (auto& m : getBestMarkers()) {
     if (getDrcBox().intersects(m.getBBox())) {
+      ++written;
       auto uptr = std::make_unique<frMarker>(m);
       auto ptr = uptr.get();
       regionQuery->addMarker(ptr);
@@ -657,7 +669,12 @@ void FlexDRWorker::endAddMarkers(frDesign* design)
         update.setMarker(*ptr);
         design_->addUpdate(update);
       }
+    } else {
+      ++dropped;
     }
+  }
+  if (gc_visibility_ != nullptr) {
+    gc_visibility_->recordWriteback(written, dropped);
   }
 }
 
