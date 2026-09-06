@@ -176,6 +176,12 @@ class FlexGCWorker::Impl
   gcNet* initRouteObj(frBlockObject* obj, gcNet* currNet = nullptr);
   void initDesign(const frDesign* design, bool skipDR = false);
   bool initDesign_skipObj(frBlockObject* obj);
+  // vibeic fork: MEASUREMENT ONLY -- debug-gated, no behaviour change.
+  // Reports what THIS worker's object set contains versus what the design's
+  // DR-object region query holds over the same extBox, so the in-loop and
+  // whole-design asymmetry can be measured rather than argued. Costs one
+  // region query per worker and only when `-debug_level DRT gcinit 1` is set.
+  void logDesignObjCoverage(const frDesign* design);
   void initDRWorker();
   void initNets();
   void initNet(gcNet* net);
