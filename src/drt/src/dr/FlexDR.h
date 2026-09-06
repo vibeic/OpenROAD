@@ -100,16 +100,58 @@ struct GcVisibilityStats
   std::atomic<uint64_t> markers_dropped_outside_drcbox{0};
   std::atomic<uint64_t> markers_removed{0};
 
+  // ordrv3 probe: endAddNets_merge rewrites two same-net collinear path segs
+  // into one AFTER the worker's GC has run. If the merged segment's bbox is not
+  // the union of the two inputs' bboxes, the design that gets written out is
+  // not the geometry any worker checked.
+  std::atomic<uint64_t> merges{0};
+  std::atomic<uint64_t> merges_width_mismatch{0};
+  std::atomic<uint64_t> merges_grew{0};
+  std::atomic<uint64_t> merges_shrank{0};
+  std::atomic<uint64_t> merges_moved{0};
+
+  // ordrv3: the drcBox filter at its REAL site. FlexDRWorker::setMarkers drops
+  // every GC marker outside drcBox (routeBox + DRCSAFEDIST) although the GC
+  // worker checked extBox (routeBox + MTSAFEDIST). endAddMarkers, where ordrv2
+  // counted, runs downstream of this and therefore always saw zero.
+  std::atomic<uint64_t> setmarkers_kept{0};
+  std::atomic<uint64_t> setmarkers_dropped{0};
+
   void resetWriteback()
   {
     markers_written.store(0, std::memory_order_relaxed);
     markers_dropped_outside_drcbox.store(0, std::memory_order_relaxed);
     markers_removed.store(0, std::memory_order_relaxed);
+    setmarkers_kept.store(0, std::memory_order_relaxed);
+    setmarkers_dropped.store(0, std::memory_order_relaxed);
   }
 
   void recordRemovals(uint64_t removed)
   {
     markers_removed.fetch_add(removed, std::memory_order_relaxed);
+  }
+
+  void recordSetMarkers(uint64_t kept, uint64_t dropped)
+  {
+    setmarkers_kept.fetch_add(kept, std::memory_order_relaxed);
+    setmarkers_dropped.fetch_add(dropped, std::memory_order_relaxed);
+  }
+
+  void recordMerge(bool width_mismatch, bool grew, bool shrank)
+  {
+    merges.fetch_add(1, std::memory_order_relaxed);
+    if (width_mismatch) {
+      merges_width_mismatch.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (grew) {
+      merges_grew.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (shrank) {
+      merges_shrank.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (grew || shrank) {
+      merges_moved.fetch_add(1, std::memory_order_relaxed);
+    }
   }
 
   void recordWriteback(uint64_t written, uint64_t dropped)
@@ -203,6 +245,7 @@ class FlexDR
   // vibeic fork: measurement bookkeeping, see GcVisibilityStats.
   void reportGcVisibility() const;
   void reportMarkerWriteback(int num_workers) const;
+  void reportMergeProbe() const;
   // maxSpacing fix
   void fixMaxSpacing();
 
@@ -460,11 +503,20 @@ class FlexDRWorker
   void setMarkers(const std::vector<std::unique_ptr<frMarker>>& in)
   {
     markers_.clear();
+    // ordrv3 probe, MEASUREMENT ONLY: this is where the GC worker's extBox-wide
+    // marker set is cut down to drcBox. See GcVisibilityStats.
+    uint64_t kept = 0, dropped = 0;
     for (auto& uMarker : in) {
       auto& marker = *uMarker;
       if (getDrcBox().intersects(marker.getBBox())) {
+        ++kept;
         markers_.push_back(marker);
+      } else {
+        ++dropped;
       }
+    }
+    if (gc_visibility_ != nullptr) {
+      gc_visibility_->recordSetMarkers(kept, dropped);
     }
   }
   void setMarkers(std::vector<frMarker*>& in)

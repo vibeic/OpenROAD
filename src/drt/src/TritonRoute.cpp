@@ -2260,6 +2260,33 @@ void TritonRoute::getDRCMarkers(frList<std::unique_ptr<frMarker>>& markers,
             != mapMarkers.end()) {
           continue;
         }
+        // ordrv3 probe, MEASUREMENT ONLY: the rects survive only here. The copy
+        // below drops victims_/aggressors_ (frMarker's copy ctor keeps neither,
+        // although its copy-assignment does), so this is the last point at
+        // which "which of the two rects was not fixed" can be read at all.
+        if (con != nullptr
+            && con->typeId()
+                   == frConstraintTypeEnum::frcNonSufficientMetalConstraint
+            && logger_->debugCheck(utl::DRT, "verifysplit", 1)) {
+          std::string d;
+          for (auto& v : marker->getVictims()) {
+            const odb::Rect& r = std::get<1>(v.second);
+            d += fmt::format("V[({},{})-({},{}) {}x{} fixed={}] ",
+                             r.xMin(), r.yMin(), r.xMax(), r.yMax(),
+                             r.dx(), r.dy(), std::get<2>(v.second) ? 1 : 0);
+          }
+          for (auto& a : marker->getAggressors()) {
+            const odb::Rect& r = std::get<1>(a.second);
+            d += fmt::format("A[({},{})-({},{}) {}x{} fixed={}] ",
+                             r.xMin(), r.yMin(), r.xMax(), r.yMax(),
+                             r.dx(), r.dy(), std::get<2>(a.second) ? 1 : 0);
+          }
+          logger_->debug(utl::DRT,
+                         "verifysplit",
+                         "PREMARKER bbox=({},{})-({},{}) {}x{} rects: {}",
+                         bbox.xMin(), bbox.yMin(), bbox.xMax(), bbox.yMax(),
+                         bbox.dx(), bbox.dy(), d);
+        }
         markers.push_back(std::make_unique<frMarker>(*marker));
         mapMarkers[{bbox, layerNum, con, marker->getSrcs()}]
             = markers.back().get();
