@@ -36,7 +36,8 @@ proc detailed_route { args } {
       -db_process_node -droute_end_iter -via_in_pin_bottom_layer \
       -via_in_pin_top_layer -via_access_layer -or_seed -or_k -bottom_routing_layer \
       -top_routing_layer -verbose -remote_host -remote_port -shared_volume \
-      -cloud_size -min_access_points -repair_pdn_vias -drc_report_iter_step} \
+      -cloud_size -min_access_points -repair_pdn_vias -drc_report_iter_step \
+      -gc_dump_shapes_box} \
     flags {-disable_via_gen -distributed -clean_patches -no_pin_access \
            -single_step_dr -save_guide_updates -report_unowned_gc_objects \
            -gc_verify_checkndr -gc_inloop_no_checkndr}
@@ -64,6 +65,14 @@ proc detailed_route { args } {
   set gc_verify_checkndr [expr [info exists flags(-gc_verify_checkndr)]]
   set gc_inloop_no_checkndr \
     [expr [info exists flags(-gc_inloop_no_checkndr)]]
+  # vibeic fork, MEASUREMENT ONLY, hidden: "x1 y1 x2 y2" in dbu. Every GC worker
+  # whose extBox contains that box dumps the object set it holds there before
+  # any check runs, so the in-loop and whole-design views can be diffed.
+  if { [info exists keys(-gc_dump_shapes_box)] } {
+    set gc_dump_shapes_box $keys(-gc_dump_shapes_box)
+  } else {
+    set gc_dump_shapes_box ""
+  }
 
   if { [info exists keys(-repair_pdn_vias)] } {
     set repair_pdn_vias $keys(-repair_pdn_vias)
@@ -183,7 +192,8 @@ proc detailed_route { args } {
     $via_access_layer $or_seed $or_k $verbose \
     $clean_patches $no_pin_access $single_step_dr $min_access_points \
     $save_guide_updates $repair_pdn_vias $drc_report_iter_step \
-    $report_unowned_gc_objects $gc_verify_checkndr $gc_inloop_no_checkndr
+    $report_unowned_gc_objects $gc_verify_checkndr $gc_inloop_no_checkndr \
+    $gc_dump_shapes_box
 }
 
 proc detailed_route_num_drvs { args } {

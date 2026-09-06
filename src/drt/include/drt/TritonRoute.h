@@ -83,6 +83,7 @@ struct ParamStruct
   bool reportUnownedGcObjects = false;
   bool gcVerifyCheckNdr = false;
   bool gcInloopNoCheckNdr = false;
+  std::string gcDumpShapesBox;
 };
 
 class TritonRoute : public PinAccessService

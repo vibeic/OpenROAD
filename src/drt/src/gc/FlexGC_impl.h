@@ -190,6 +190,8 @@ class FlexGCWorker::Impl
   // vibeic fork: the in-loop / whole-design checkNDRs asymmetry, and the two
   // measurement switches that can cancel it. See checkMetalSpacing.
   bool checkMetalSpacing_checkNDRs() const;
+  // vibeic fork, MEASUREMENT ONLY. See RouterConfiguration::GC_DUMP_X1.
+  void dumpShapesAt() const;
   void initDRWorker();
   void initNets();
   void initNet(gcNet* net);

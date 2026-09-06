@@ -14,6 +14,7 @@
 #include <memory>
 #include <numeric>
 #include <set>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -2478,6 +2479,11 @@ void TritonRoute::setParams(const ParamStruct& params)
   router_cfg_->REPORT_UNOWNED_GC_OBJECTS = params.reportUnownedGcObjects;
   router_cfg_->GC_VERIFY_CHECKNDR = params.gcVerifyCheckNdr;
   router_cfg_->GC_INLOOP_NO_CHECKNDR = params.gcInloopNoCheckNdr;
+  if (!params.gcDumpShapesBox.empty()) {
+    std::istringstream ss(params.gcDumpShapesBox);
+    ss >> router_cfg_->GC_DUMP_X1 >> router_cfg_->GC_DUMP_Y1
+        >> router_cfg_->GC_DUMP_X2 >> router_cfg_->GC_DUMP_Y2;
+  }
 }
 
 void TritonRoute::addWorkerResults(

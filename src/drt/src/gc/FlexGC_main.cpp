@@ -4153,6 +4153,117 @@ void FlexGCWorker::Impl::modifyMarkers()
   }
 }
 
+// vibeic fork: MEASUREMENT ONLY, off unless a box is given. Dumps the object
+// set THIS worker holds at one location, before any check runs, so an in-loop
+// worker's view and a whole-design worker's view of the same corner can be
+// diffed by geometry and by ownership rather than argued about.
+//
+// Three things are printed per worker: the raw fixed rectangles (what
+// initDesign loaded -- std-cell pin metal, blockages), the raw routed
+// rectangles (what initDRWorker or initNetsFromDesign loaded -- wires, via
+// enclosures, patches), and the MERGED max-rectangles, which are what
+// checkMetalSpacing and checkMetalShape actually run on. The merged set is the
+// one that decides a MINWIDTH question; the raw sets say where it came from.
+void FlexGCWorker::Impl::dumpShapesAt() const
+{
+  if (router_cfg_->GC_DUMP_X2 <= router_cfg_->GC_DUMP_X1
+      || router_cfg_->GC_DUMP_Y2 <= router_cfg_->GC_DUMP_Y1) {
+    return;
+  }
+  const odb::Rect target(router_cfg_->GC_DUMP_X1,
+                         router_cfg_->GC_DUMP_Y1,
+                         router_cfg_->GC_DUMP_X2,
+                         router_cfg_->GC_DUMP_Y2);
+  if (!getExtBox().contains(target)) {
+    return;
+  }
+  const bool in_loop = (getDRWorker() != nullptr);
+  const char* kind = in_loop ? "IN-LOOP" : "WHOLE-DESIGN";
+  odb::Rect probe = target;
+  probe.bloat(1, probe);
+
+  logger_->report(
+      "SHAPEDUMP worker={} extBox=({},{})-({},{}) drcBox=({},{})-({},{}) "
+      "target=({},{})-({},{})",
+      kind,
+      getExtBox().xMin(), getExtBox().yMin(),
+      getExtBox().xMax(), getExtBox().yMax(),
+      drcBox_.xMin(), drcBox_.yMin(), drcBox_.xMax(), drcBox_.yMax(),
+      target.xMin(), target.yMin(), target.xMax(), target.yMax());
+
+  auto owner_name = [](const gcNet* net) -> std::string {
+    frBlockObject* o = net->getOwner();
+    if (o == nullptr) {
+      return "<none>";
+    }
+    if (o->typeId() == frcNet) {
+      return "net:" + static_cast<frNet*>(o)->getName();
+    }
+    return "obj" + std::to_string((int) o->typeId());
+  };
+
+  auto dump_rects = [&](const char* tag,
+                        const gcNet* net,
+                        const gtl::polygon_90_set_data<frCoord>& ps,
+                        frLayerNum lnum) {
+    std::vector<gtl::rectangle_data<frCoord>> rects;
+    ps.get_rectangles(rects);
+    for (const auto& r : rects) {
+      const odb::Rect box(gtl::xl(r), gtl::yl(r), gtl::xh(r), gtl::yh(r));
+      if (!box.intersects(probe)) {
+        continue;
+      }
+      logger_->report(
+          "SHAPEDUMP   {} {} layer={} rect=({},{})-({},{}) {}x{}",
+          kind, tag, lnum,
+          box.xMin(), box.yMin(), box.xMax(), box.yMax(),
+          box.dx(), box.dy());
+      logger_->report("SHAPEDUMP     owner={}", owner_name(net));
+    }
+  };
+
+  for (const auto& uNet : nets_) {
+    const gcNet* net = uNet.get();
+    for (frLayerNum i = getTech()->getBottomLayerNum();
+         i <= getTech()->getTopLayerNum();
+         i++) {
+      if (getTech()->getLayer(i)->getType() != dbTechLayerType::ROUTING) {
+        continue;
+      }
+      dump_rects("FIXED", net, net->getPolygons(i, true), i);
+      dump_rects("ROUTE", net, net->getPolygons(i, false), i);
+      for (const auto& pin : net->getPins(i)) {
+        gtl::rectangle_data<frCoord> pe;
+        gtl::extents(pe, *(pin->getPolygon()));
+        const odb::Rect pbox(
+            gtl::xl(pe), gtl::yl(pe), gtl::xh(pe), gtl::yh(pe));
+        if (!pbox.intersects(probe)) {
+          continue;
+        }
+        logger_->report(
+            "SHAPEDUMP   {} MERGEDPIN {} layer={} extents=({},{})-({},{}) "
+            "maxrects={}",
+            kind, owner_name(net), i,
+            pbox.xMin(), pbox.yMin(), pbox.xMax(), pbox.yMax(),
+            (int) pin->getMaxRectangles().size());
+        for (const auto& mr : pin->getMaxRectangles()) {
+          const odb::Rect mb(
+              gtl::xl(*mr), gtl::yl(*mr), gtl::xh(*mr), gtl::yh(*mr));
+          if (!mb.intersects(probe)) {
+            continue;
+          }
+          logger_->report(
+              "SHAPEDUMP     {} MAXRECT ({},{})-({},{}) {}x{} fixed={}",
+              kind,
+              mb.xMin(), mb.yMin(), mb.xMax(), mb.yMax(),
+              mb.dx(), mb.dy(), mr->isFixed() ? 1 : 0);
+        }
+      }
+    }
+  }
+  logger_->report("SHAPEDUMP END worker={}", kind);
+}
+
 int FlexGCWorker::Impl::main()
 {
   // incremental updates
@@ -4173,6 +4284,9 @@ int FlexGCWorker::Impl::main()
   }
   // clear existing markers
   clearMarkers();
+  // vibeic fork, MEASUREMENT ONLY: the object set as it stands right before the
+  // checks run. See dumpShapesAt.
+  dumpShapesAt();
   // check LEF58CornerSpacing and LEF58WidthTable ORTH
   checkMetalCornerSpacing();
   // check Short, NSMet, MetSpc based on max rectangles

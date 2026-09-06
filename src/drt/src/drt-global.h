@@ -65,6 +65,16 @@ struct RouterConfiguration
   // measured. See FlexGCWorker::Impl::checkMetalSpacing.
   bool GC_VERIFY_CHECKNDR = false;
   bool GC_INLOOP_NO_CHECKNDR = false;
+  // vibeic fork, MEASUREMENT ONLY, DEFAULT OFF. When the box is non-empty,
+  // every GC worker whose extBox contains it dumps -- BEFORE any check runs -- the
+  // object set it holds there: each fixed and routed rectangle with its owning
+  // net, and the merged max-rectangles the min-width / NS-Metal checks actually
+  // run on. Both worker kinds dump, so the two can be diffed.
+  // See FlexGCWorker::Impl::dumpShapesAt.
+  int GC_DUMP_X1 = 0;
+  int GC_DUMP_Y1 = 0;
+  int GC_DUMP_X2 = 0;
+  int GC_DUMP_Y2 = 0;
 
   std::string VIAINPIN_BOTTOMLAYER_NAME;
   std::string VIAINPIN_TOPLAYER_NAME;
