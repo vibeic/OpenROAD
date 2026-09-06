@@ -35,6 +35,7 @@ class FlexGCWorker
   // setters
   void setExtBox(const odb::Rect& in);
   void setDrcBox(const odb::Rect& in);
+  const odb::Rect& getDrcBox() const;
   bool setTargetNet(frBlockObject* in);
   bool setTargetNet(drNet* in);
   gcNet* getTargetNet();

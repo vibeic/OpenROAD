@@ -2255,6 +2255,34 @@ void TritonRoute::getDRCMarkers(frList<std::unique_ptr<frMarker>>& markers,
         if (!bbox.intersects(requiredDrcBox)) {
           continue;
         }
+        // vibeic fork: a marker belongs to the tile that OWNS it.
+        //
+        // These workers tile the die: routeBox, drcBox = routeBox +
+        // DRCSAFEDIST, extBox = routeBox + MTSAFEDIST. A worker loads every
+        // object INTERSECTING its extBox, so near the edge of that box its view
+        // of a net is incomplete -- the part of the net that lies just outside
+        // is simply not there. Max-rectangle decomposition of the clipped
+        // polygon then yields sub-rectangles that the whole shape does not
+        // have, and two of them can overlap in a corner narrower than MINWIDTH.
+        // The result is a same-net NS-Metal marker for metal that is
+        // continuous and wide enough.
+        //
+        // Measured on subservient (gf180mcuD): a junction at
+        // (571500,1056310)-(571580,1056420) is reported 80 x 110 against
+        // Metal1's MINWIDTH of 460 by the tile whose extBox starts at
+        // y=1056400 -- above the fixed rail that joins the two shapes, so that
+        // tile never loads the rail -- while the tile that contains the
+        // junction loads it, decomposes the same metal into a single 1140 x 570
+        // rectangle, and correctly skips it as same-net sufficient metal.
+        // The marker's bbox is outside the emitting tile's own drcBox.
+        //
+        // FlexDRWorker already applies exactly this ownership rule
+        // (setMarkers and endAddMarkers both filter by getDrcBox()), which is
+        // why the ripup loop does not report these and this pass did. Apply the
+        // same rule here so the two passes answer the same question.
+        if (!worker->getDrcBox().intersects(bbox)) {
+          continue;
+        }
         auto layerNum = marker->getLayerNum();
         auto con = marker->getConstraint();
         if (mapMarkers.find({bbox, layerNum, con, marker->getSrcs()})
