@@ -78,6 +78,9 @@ struct ParamStruct
   bool saveGuideUpdates = false;
   std::string repairPDNLayerName;
   int num_threads = 1;
+  // vibeic fork: -gc_sees_routed. Declared LAST so the positional brace
+  // initialisation in TritonRoute.i keeps its existing order.
+  bool gcSeesRouted = false;
 };
 
 class TritonRoute : public PinAccessService
@@ -245,6 +248,9 @@ class TritonRoute : public PinAccessService
   // "0 violations" means "verified clean", not "the loop stopped finding
   // things".  Returns the verified violation count.
   int verifyRoute();
+  // vibeic fork, MEASUREMENT ONLY, `-debug_level DRT verifysplit 1`.
+  // The whole-design marker count as of BEFORE the post-route repair passes.
+  void reportPreRepairDrc();
   odb::dbDatabase* getDb() const { return db_; }
   void fixMaxSpacing(int num_threads);
   void deleteInstancePAData(frInst* inst, bool delete_inst = false);

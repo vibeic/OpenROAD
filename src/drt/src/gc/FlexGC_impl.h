@@ -122,6 +122,10 @@ class FlexGCWorker::Impl
   void initPA0(const frDesign* design);
   void initPA1();
   void initNetsFromDesign(const frDesign* design);
+  // vibeic fork, gated by RouterConfiguration::GC_SEES_ROUTED. The in-loop
+  // half of initNetsFromDesign: loads the design's already-routed objects in
+  // this worker's extBox EXCEPT those on nets its own DR worker owns.
+  void initUnownedNetsFromDesign(const frDesign* design);
   // update
   void updateGCWorker();
 

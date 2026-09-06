@@ -50,6 +50,13 @@ struct RouterConfiguration
   bool DO_PA = true;
   bool SINGLE_STEP_DR = false;
   bool SAVE_GUIDE_UPDATES = false;
+  // vibeic fork, EXPERIMENT, DEFAULT OFF. When true an IN-LOOP FlexGC worker
+  // additionally loads the already-routed design objects inside its extBox that
+  // belong to nets its own FlexDRWorker does NOT own -- the set the gate at
+  // FlexGC_init.cpp:973 withholds from it today. See
+  // FlexGCWorker::Impl::initUnownedNetsFromDesign. While this is false nothing
+  // on the routing path changes.
+  bool GC_SEES_ROUTED = false;
 
   std::string VIAINPIN_BOTTOMLAYER_NAME;
   std::string VIAINPIN_TOPLAYER_NAME;

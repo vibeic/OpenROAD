@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <list>
@@ -77,6 +78,35 @@ struct FlexDRViaData
 };
 
 class FlexDRFlow;
+
+// vibeic fork: what -gc_sees_routed actually did, counted over the whole run.
+// Owned by FlexDR (constructed fresh per detailed_route, so there is no stale
+// state to carry into a second route in the same session); the workers hold a
+// bare pointer to it and a deserialized distributed worker holds nullptr.
+// Atomic because in-loop workers within a batch run under OpenMP.
+struct GcVisibilityStats
+{
+  std::atomic<uint64_t> in_loop_inits{0};
+  std::atomic<uint64_t> inits_with_unowned{0};
+  std::atomic<uint64_t> unowned_objs{0};
+  std::atomic<uint64_t> max_unowned_objs{0};
+
+  void record(uint64_t objs)
+  {
+    in_loop_inits.fetch_add(1, std::memory_order_relaxed);
+    if (objs == 0) {
+      return;
+    }
+    inits_with_unowned.fetch_add(1, std::memory_order_relaxed);
+    unowned_objs.fetch_add(objs, std::memory_order_relaxed);
+    uint64_t seen = max_unowned_objs.load(std::memory_order_relaxed);
+    while (objs > seen
+           && !max_unowned_objs.compare_exchange_weak(
+               seen, objs, std::memory_order_relaxed)) {
+    }
+  }
+};
+
 class FlexDR
 {
  public:
@@ -142,6 +172,8 @@ class FlexDR
 
   void reportGuideCoverage();
   void incIter() { ++iter_; }
+  // vibeic fork: -gc_sees_routed bookkeeping, see GcVisibilityStats.
+  void reportGcVisibility() const;
   // maxSpacing fix
   void fixMaxSpacing();
 
@@ -172,6 +204,7 @@ class FlexDR
   bool increaseClipsize_;
   float clipSizeInc_;
   int iter_;
+  GcVisibilityStats gc_visibility_;
 
   // others
   void initFromTA();
@@ -342,6 +375,13 @@ class FlexDRWorker
   void setRouteBox(const odb::Rect& boxIn) { routeBox_ = boxIn; }
   void setExtBox(const odb::Rect& boxIn) { extBox_ = boxIn; }
   void setDrcBox(const odb::Rect& boxIn) { drcBox_ = boxIn; }
+  // vibeic fork: not serialized -- a distributed worker keeps nullptr and its
+  // GC workers simply do not count. See GcVisibilityStats.
+  void setGcVisibilityStats(GcVisibilityStats* stats)
+  {
+    gc_visibility_ = stats;
+  }
+  GcVisibilityStats* getGcVisibilityStats() const { return gc_visibility_; }
   void setDRIter(int in) { drIter_ = in; }
   void setDRIter(
       int in,
@@ -541,6 +581,8 @@ class FlexDRWorker
   frDesign* design_{nullptr};
   utl::Logger* logger_{nullptr};
   RouterConfiguration* router_cfg_{nullptr};
+  // owned by FlexDR; not serialized
+  GcVisibilityStats* gc_visibility_{nullptr};
   AbstractDRGraphics* graphics_{nullptr};  // owned by FlexDR
   frDebugSettings* debugSettings_{nullptr};
   FlexDRViaData* via_data_{nullptr};

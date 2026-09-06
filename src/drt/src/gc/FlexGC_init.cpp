@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2019-2025, The OpenROAD Authors
 
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1045,6 +1047,84 @@ void FlexGCWorker::Impl::logDesignObjCoverage(const frDesign* design)
                  (int) getNets().size());
 }
 
+// vibeic fork: THE ROOT CAUSE, behind RouterConfiguration::GC_SEES_ROUTED.
+//
+// logDesignObjCoverage() above measures the defect; this closes it. An in-loop
+// GC worker is built from its FlexDRWorker's drNets only, so already-routed
+// metal belonging to OTHER nets inside the same extBox -- nets finished in an
+// earlier iteration and not touched since -- is invisible to it. Measured on
+// this branch: gcd_nangate45 89/89 in-loop workers skip that set, worst 503
+// objects; sha256 (26,040 instances) 511/511, worst 3,145 objects over 266 nets
+// while the worker owned 277 nets of its own. The ripup loop can therefore
+// converge while violations it never checked stand, and the post-route
+// whole-design pass then reports them (DRT-0701).
+//
+// This loads exactly that missing set and nothing else.
+//
+// Nets the DR worker OWNS are excluded, and that exclusion is load-bearing, not
+// tidiness: initDRWorker() has already loaded this worker's LIVE, in-progress
+// copy of those nets, while the design's region query still holds the PREVIOUS
+// iteration's shapes for the same nets until end() writes back. Loading both
+// would check a net against a stale copy of itself.
+//
+// Cost: one extBox-wide queryDRObj plus gcNet polygon/edge/corner/max-rectangle
+// construction for the foreign nets, per in-loop worker init. That is the
+// number logDesignObjCoverage reports, and it is why this is a flag and not the
+// default.
+//
+// Safe under threading for the same reason initNetsFromDesign is: within an
+// OpenMP batch the design's region query is read-only -- writes happen in
+// FlexDRWorker::end(), which FlexDR runs serially after the batch.
+void FlexGCWorker::Impl::initUnownedNetsFromDesign(const frDesign* design)
+{
+  auto* drWorker = getDRWorker();
+  if (drWorker == nullptr) {
+    return;
+  }
+  // Membership only -- never iterated, so the pointer hashing cannot make the
+  // router non-deterministic.
+  std::unordered_set<frNet*> owned;
+  owned.reserve(drWorker->getNets().size() * 2 + 1);
+  for (auto& uDRNet : drWorker->getNets()) {
+    owned.insert(uDRNet->getFrNet());
+  }
+
+  std::vector<frBlockObject*> result;
+  std::map<gcNet*, std::vector<frPatchWire*>> pwires;
+  design->getRegionQuery()->queryDRObj(getExtBox(), result);
+  uint64_t loaded = 0;
+  for (auto rptr : result) {
+    frNet* net = drObjNet(rptr);
+    if (net == nullptr || owned.find(net) != owned.end()) {
+      continue;
+    }
+    ++loaded;
+    if (rptr->typeId() == frcPatchWire) {
+      auto cptr = static_cast<frPatchWire*>(rptr);
+      auto gNet = initRouteObj(cptr);
+      pwires[gNet].push_back(cptr);
+    } else {
+      initRouteObj(rptr);
+    }
+  }
+  // Same non-tapered bookkeeping initNetsFromDesign does for patch wires.
+  for (const auto& [gNet, patches] : pwires) {
+    for (auto pwire : patches) {
+      odb::Rect box = pwire->getBBox();
+      int z = pwire->getLayerNum() / 2 - 1;
+      for (auto& nt : gNet->getNonTaperedRects(z)) {
+        if (nt.intersects(box)) {
+          gNet->addNonTaperedRect(box, z);
+          break;
+        }
+      }
+    }
+  }
+  if (auto* stats = drWorker->getGcVisibilityStats()) {
+    stats->record(loaded);
+  }
+}
+
 // init initializes all nets from frDesign if no drWorker is provided
 void FlexGCWorker::Impl::init(const frDesign* design)
 {
@@ -1055,6 +1135,11 @@ void FlexGCWorker::Impl::init(const frDesign* design)
   initDRWorker();
   if (getDRWorker() == nullptr) {
     initNetsFromDesign(design);
+  } else if (router_cfg_->GC_SEES_ROUTED) {
+    // vibeic fork, EXPERIMENT, off by default. Everything above this line and
+    // everything below it is untouched; with the flag off this branch does not
+    // exist and the routing path is byte-identical.
+    initUnownedNetsFromDesign(design);
   }
   initNets();
   initRegionQuery();

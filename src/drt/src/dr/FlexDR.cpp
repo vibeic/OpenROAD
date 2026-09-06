@@ -599,6 +599,7 @@ std::unique_ptr<FlexDRWorker> FlexDR::createWorker(const int x_offset,
   worker->setRouteBox(route_box);
   worker->setExtBox(extBox);
   worker->setDrcBox(drcBox);
+  worker->setGcVisibilityStats(&gc_visibility_);
   worker->setMazeEndIter(args.mazeEndIter);
   worker->setDRIter(iter_);
   worker->setDebugSettings(router_->getDebugSettings());
@@ -654,6 +655,26 @@ void printIterationProgress(utl::Logger* logger,
   }
 }
 }  // namespace
+
+// vibeic fork: say what -gc_sees_routed actually did. Emitted ONLY when the
+// flag is on, so with it off not one byte of the log moves. Reported even at
+// VERBOSE 0: a run that opts into an experiment is entitled to its result.
+void FlexDR::reportGcVisibility() const
+{
+  if (!router_cfg_->GC_SEES_ROUTED) {
+    return;
+  }
+  logger_->info(
+      DRT,
+      708,
+      "gc_sees_routed: {} in-loop GC worker init(s); {} of them loaded "
+      "already-routed metal they do not own; {} object(s) total, worst single "
+      "init {}.",
+      gc_visibility_.in_loop_inits.load(),
+      gc_visibility_.inits_with_unowned.load(),
+      gc_visibility_.unowned_objs.load(),
+      gc_visibility_.max_unowned_objs.load());
+}
 
 void FlexDR::reportIterationViolations() const
 {
@@ -2060,6 +2081,7 @@ void FlexDR::fixMaxSpacing()
     worker->setRouteBox(route_box);
     worker->setExtBox(ext_box);
     worker->setDrcBox(drc_box);
+    worker->setGcVisibilityStats(&gc_visibility_);
     worker->setDRIter(64);
     worker->setDebugSettings(router_->getDebugSettings());
     worker->setRipupMode(RipUpMode::VIASWAP);
@@ -2191,6 +2213,7 @@ int FlexDR::main()
 
   end(/* done */ true);
   reporter->end(true);
+  reportGcVisibility();
 
   if (!router_cfg_->GUIDE_REPORT_FILE.empty()) {
     reportGuideCoverage();

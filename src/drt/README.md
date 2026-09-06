@@ -64,6 +64,7 @@ detailed_route
     [-save_guide_updates]
     [-repair_pdn_vias layer]
     [-single_step_dr]
+    [-gc_sees_routed]
 ```
 
 #### Options
