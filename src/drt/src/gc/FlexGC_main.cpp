@@ -911,8 +911,27 @@ void FlexGCWorker::Impl::checkMetalSpacing_main(gcRect* rect,
   }
 }
 
+// vibeic fork: the in-loop and whole-design passes do not ask the same
+// question. checkNDRs is TRUE when a DR worker is attached and FALSE otherwise,
+// and it decides both the spacing query bloat
+// (checkMetalSpacing_getMaxSpcVal) and whether the special-spacing rectangles
+// are swept -- on the path that produces NS-Metal markers. The two switches are
+// measurement only, default off, and let each pass be given the other's value.
+bool FlexGCWorker::Impl::checkMetalSpacing_checkNDRs() const
+{
+  const bool in_loop = (getDRWorker() != nullptr);
+  if (in_loop && router_cfg_->GC_INLOOP_NO_CHECKNDR) {
+    return false;
+  }
+  if (!in_loop && router_cfg_->GC_VERIFY_CHECKNDR) {
+    return true;
+  }
+  return in_loop || !router_cfg_->AUTO_TAPER_NDR_NETS;
+}
+
 void FlexGCWorker::Impl::checkMetalSpacing()
 {
+  const bool check_ndrs = checkMetalSpacing_checkNDRs();
   if (targetNet_) {
     // layer --> net --> polygon --> maxrect
     for (int i = std::max(getTech()->getBottomLayerNum(), minLayerNum_);
@@ -927,9 +946,7 @@ void FlexGCWorker::Impl::checkMetalSpacing()
           checkMetalSpacing_wrongDir(pin.get(), currLayer);
         }
         for (auto& maxrect : pin->getMaxRectangles()) {
-          checkMetalSpacing_main(
-              maxrect.get(),
-              getDRWorker() || !router_cfg_->AUTO_TAPER_NDR_NETS);
+          checkMetalSpacing_main(maxrect.get(), check_ndrs);
           if (currLayer->hasTwoWiresForbiddenSpacingConstraints()) {
             for (auto con :
                  currLayer->getTwoWiresForbiddenSpacingConstraints()) {
@@ -944,8 +961,7 @@ void FlexGCWorker::Impl::checkMetalSpacing()
         }
       }
       for (auto& sr : targetNet_->getSpecialSpcRects()) {
-        checkMetalSpacing_main(
-            sr.get(), getDRWorker() || !router_cfg_->AUTO_TAPER_NDR_NETS, true);
+        checkMetalSpacing_main(sr.get(), check_ndrs, true);
       }
     }
   } else {
@@ -964,9 +980,7 @@ void FlexGCWorker::Impl::checkMetalSpacing()
           }
           for (auto& maxrect : pin->getMaxRectangles()) {
             // Short, NSMetal, metSpc
-            checkMetalSpacing_main(
-                maxrect.get(),
-                getDRWorker() || !router_cfg_->AUTO_TAPER_NDR_NETS);
+            checkMetalSpacing_main(maxrect.get(), check_ndrs);
             if (currLayer->hasTwoWiresForbiddenSpacingConstraints()) {
               for (auto con :
                    currLayer->getTwoWiresForbiddenSpacingConstraints()) {
@@ -983,7 +997,7 @@ void FlexGCWorker::Impl::checkMetalSpacing()
         for (auto& sr : net->getSpecialSpcRects()) {
           checkMetalSpacing_main(
               sr.get(),
-              getDRWorker() || !router_cfg_->AUTO_TAPER_NDR_NETS,
+              check_ndrs,
               true);
         }
       }

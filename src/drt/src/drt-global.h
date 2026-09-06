@@ -58,6 +58,13 @@ struct RouterConfiguration
   // FlexGCWorker::Impl::countUnownedDesignObjs for why the loading was built,
   // measured and then removed.
   bool REPORT_UNOWNED_GC_OBJECTS = false;
+  // vibeic fork, MEASUREMENT ONLY, both DEFAULT OFF. checkMetalSpacing() runs
+  // with checkNDRs TRUE for an in-loop GC worker and FALSE for a whole-design
+  // one, and that flag is threaded into the path that produces NS-Metal
+  // markers. These give each pass the other's value so the asymmetry can be
+  // measured. See FlexGCWorker::Impl::checkMetalSpacing.
+  bool GC_VERIFY_CHECKNDR = false;
+  bool GC_INLOOP_NO_CHECKNDR = false;
 
   std::string VIAINPIN_BOTTOMLAYER_NAME;
   std::string VIAINPIN_TOPLAYER_NAME;
