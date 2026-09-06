@@ -74,6 +74,7 @@ Number of nets:           1
 
 [INFO DRT-0176] GCELLGRID X 0 DO 13 STEP 5000 ;
 [INFO DRT-0177] GCELLGRID Y 0 DO 13 STEP 5000 ;
-[INFO DRT-0703] Post-route non-sufficient-metal repair: widened 1 same-net junction(s) to MINWIDTH, 0 left unresolved.
+[INFO DRT-0703] Post-route non-sufficient-metal repair: handed 1 junction(s); widened 1; left 0 unresolved (no_room 0, degenerate 0, not_a_neck 0, no_owner 0, not_routing 0).
 [INFO DRT-0704] NS-Metal repair check: before=1 patched=1 after=0.
+[INFO DRT-0706] NS-Metal repair outcome: handed 1, cleared 1, still present 0 (the pass widened 1).
 No differences found.
