@@ -599,6 +599,7 @@ std::unique_ptr<FlexDRWorker> FlexDR::createWorker(const int x_offset,
   worker->setRouteBox(route_box);
   worker->setExtBox(extBox);
   worker->setDrcBox(drcBox);
+  worker->setGcVisibilityStats(&gc_visibility_);
   worker->setMazeEndIter(args.mazeEndIter);
   worker->setDRIter(iter_);
   worker->setDebugSettings(router_->getDebugSettings());
@@ -654,6 +655,47 @@ void printIterationProgress(utl::Logger* logger,
   }
 }
 }  // namespace
+
+// vibeic fork: MEASUREMENT ONLY, debug-gated. What the LAST iteration's workers
+// saw and then did not write back, because endAddMarkers keeps only what
+// intersects drcBox (routeBox + DRCSAFEDIST) while the GC checked extBox
+// (routeBox + MTSAFEDIST).
+void FlexDR::reportMarkerWriteback(int num_workers) const
+{
+  if (!logger_->debugCheck(DRT, "verifysplit", 1)) {
+    return;
+  }
+  logger_->debug(DRT,
+                 "verifysplit",
+                 "WRITEBACK iter={} workers={} removed={} written={} "
+                 "dropped_outside_drcbox={} block_markers={}",
+                 iter_,
+                 num_workers,
+                 gc_visibility_.markers_removed.load(),
+                 gc_visibility_.markers_written.load(),
+                 gc_visibility_.markers_dropped_outside_drcbox.load(),
+                 getDesign()->getTopBlock()->getNumMarkers());
+}
+
+// vibeic fork: report what -report_unowned_gc_objects counted. Emitted ONLY
+// when the switch is on, so with it off not one byte of the log moves, and
+// even at VERBOSE 0: a run that asks for a measurement is entitled to it.
+void FlexDR::reportGcVisibility() const
+{
+  if (!router_cfg_->REPORT_UNOWNED_GC_OBJECTS) {
+    return;
+  }
+  logger_->info(
+      DRT,
+      708,
+      "unowned_gc_objects: {} in-loop GC worker init(s); {} of them had "
+      "already-routed metal in extBox on nets they do not own; {} object(s) "
+      "total, worst single init {}.",
+      gc_visibility_.in_loop_inits.load(),
+      gc_visibility_.inits_with_unowned.load(),
+      gc_visibility_.unowned_objs.load(),
+      gc_visibility_.max_unowned_objs.load());
+}
 
 void FlexDR::reportIterationViolations() const
 {
@@ -1520,6 +1562,9 @@ void FlexDR::optimizationFlow(const SearchRepairArgs& args,
 
 void FlexDR::searchRepair(const SearchRepairArgs& args)
 {
+  // vibeic fork, measurement only: keep the writeback counters describing the
+  // LAST iteration, which is the one whose route is published.
+  gc_visibility_.resetWriteback();
   // Calculate flow state
   const auto flow_state = flow_state_machine_->determineNextFlow(
       {.num_violations = getDesign()->getTopBlock()->getNumMarkers(),
@@ -1588,6 +1633,7 @@ void FlexDR::searchRepair(const SearchRepairArgs& args)
              "Number of work units = {}.",
              numWorkUnits_);
   reportIterationViolations();
+  reportMarkerWriteback(iter_prog.total_num_workers);
   if (router_cfg_->VERBOSE > 0) {
     iter_prog.time.print(logger_);
     std::cout << std::flush;
@@ -2060,6 +2106,7 @@ void FlexDR::fixMaxSpacing()
     worker->setRouteBox(route_box);
     worker->setExtBox(ext_box);
     worker->setDrcBox(drc_box);
+    worker->setGcVisibilityStats(&gc_visibility_);
     worker->setDRIter(64);
     worker->setDebugSettings(router_->getDebugSettings());
     worker->setRipupMode(RipUpMode::VIASWAP);
@@ -2191,6 +2238,7 @@ int FlexDR::main()
 
   end(/* done */ true);
   reporter->end(true);
+  reportGcVisibility();
 
   if (!router_cfg_->GUIDE_REPORT_FILE.empty()) {
     reportGuideCoverage();

@@ -122,6 +122,11 @@ class FlexGCWorker::Impl
   void initPA0(const frDesign* design);
   void initPA1();
   void initNetsFromDesign(const frDesign* design);
+  // vibeic fork, MEASUREMENT ONLY, gated by
+  // RouterConfiguration::REPORT_UNOWNED_GC_OBJECTS. Counts the design's
+  // already-routed objects in this worker's extBox that are NOT on nets its own
+  // DR worker owns. Loads nothing.
+  void countUnownedDesignObjs(const frDesign* design);
   // update
   void updateGCWorker();
 

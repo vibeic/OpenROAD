@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <list>
@@ -77,6 +78,63 @@ struct FlexDRViaData
 };
 
 class FlexDRFlow;
+
+// vibeic fork: what -report_unowned_gc_objects counted over the whole run.
+// Owned by FlexDR (constructed fresh per detailed_route, so there is no stale
+// state to carry into a second route in the same session); the workers hold a
+// bare pointer to it and a deserialized distributed worker holds nullptr.
+// Atomic because in-loop workers within a batch run under OpenMP.
+struct GcVisibilityStats
+{
+  std::atomic<uint64_t> in_loop_inits{0};
+  std::atomic<uint64_t> inits_with_unowned{0};
+  std::atomic<uint64_t> unowned_objs{0};
+  std::atomic<uint64_t> max_unowned_objs{0};
+
+  // The other half of "what the worker saw that the design never heard about":
+  // a GC worker checks extBox (routeBox + MTSAFEDIST) but endAddMarkers writes
+  // back only what intersects drcBox (routeBox + DRCSAFEDIST). These two count
+  // the LAST iteration's writebacks -- reset at the top of searchRepair -- so
+  // the numbers describe the route that was actually published.
+  std::atomic<uint64_t> markers_written{0};
+  std::atomic<uint64_t> markers_dropped_outside_drcbox{0};
+  std::atomic<uint64_t> markers_removed{0};
+
+  void resetWriteback()
+  {
+    markers_written.store(0, std::memory_order_relaxed);
+    markers_dropped_outside_drcbox.store(0, std::memory_order_relaxed);
+    markers_removed.store(0, std::memory_order_relaxed);
+  }
+
+  void recordRemovals(uint64_t removed)
+  {
+    markers_removed.fetch_add(removed, std::memory_order_relaxed);
+  }
+
+  void recordWriteback(uint64_t written, uint64_t dropped)
+  {
+    markers_written.fetch_add(written, std::memory_order_relaxed);
+    markers_dropped_outside_drcbox.fetch_add(dropped,
+                                             std::memory_order_relaxed);
+  }
+
+  void record(uint64_t objs)
+  {
+    in_loop_inits.fetch_add(1, std::memory_order_relaxed);
+    if (objs == 0) {
+      return;
+    }
+    inits_with_unowned.fetch_add(1, std::memory_order_relaxed);
+    unowned_objs.fetch_add(objs, std::memory_order_relaxed);
+    uint64_t seen = max_unowned_objs.load(std::memory_order_relaxed);
+    while (objs > seen
+           && !max_unowned_objs.compare_exchange_weak(
+               seen, objs, std::memory_order_relaxed)) {
+    }
+  }
+};
+
 class FlexDR
 {
  public:
@@ -142,6 +200,9 @@ class FlexDR
 
   void reportGuideCoverage();
   void incIter() { ++iter_; }
+  // vibeic fork: measurement bookkeeping, see GcVisibilityStats.
+  void reportGcVisibility() const;
+  void reportMarkerWriteback(int num_workers) const;
   // maxSpacing fix
   void fixMaxSpacing();
 
@@ -172,6 +233,7 @@ class FlexDR
   bool increaseClipsize_;
   float clipSizeInc_;
   int iter_;
+  GcVisibilityStats gc_visibility_;
 
   // others
   void initFromTA();
@@ -342,6 +404,13 @@ class FlexDRWorker
   void setRouteBox(const odb::Rect& boxIn) { routeBox_ = boxIn; }
   void setExtBox(const odb::Rect& boxIn) { extBox_ = boxIn; }
   void setDrcBox(const odb::Rect& boxIn) { drcBox_ = boxIn; }
+  // vibeic fork: not serialized -- a distributed worker keeps nullptr and its
+  // GC workers simply do not count. See GcVisibilityStats.
+  void setGcVisibilityStats(GcVisibilityStats* stats)
+  {
+    gc_visibility_ = stats;
+  }
+  GcVisibilityStats* getGcVisibilityStats() const { return gc_visibility_; }
   void setDRIter(int in) { drIter_ = in; }
   void setDRIter(
       int in,
@@ -541,6 +610,8 @@ class FlexDRWorker
   frDesign* design_{nullptr};
   utl::Logger* logger_{nullptr};
   RouterConfiguration* router_cfg_{nullptr};
+  // owned by FlexDR; not serialized
+  GcVisibilityStats* gc_visibility_{nullptr};
   AbstractDRGraphics* graphics_{nullptr};  // owned by FlexDR
   frDebugSettings* debugSettings_{nullptr};
   FlexDRViaData* via_data_{nullptr};

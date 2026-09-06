@@ -13,6 +13,7 @@ package(features = ["layering_check"])
 COMPULSORY_TESTS = [
     "down_access_term",
     "drc_test",
+    "report_unowned_gc_objects",
     "ispd18_sample",
     "ispd18_sample_incr",
     "ndr_no_auto_taper",

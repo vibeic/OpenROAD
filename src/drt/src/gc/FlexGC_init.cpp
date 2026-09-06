@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2019-2025, The OpenROAD Authors
 
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1045,6 +1047,66 @@ void FlexGCWorker::Impl::logDesignObjCoverage(const frDesign* design)
                  (int) getNets().size());
 }
 
+// vibeic fork: MEASUREMENT ONLY, behind
+// RouterConfiguration::REPORT_UNOWNED_GC_OBJECTS. Counts; loads nothing.
+//
+// logDesignObjCoverage() above shows that an in-loop GC worker skips
+// initNetsFromDesign while a whole-design worker runs it, which reads like the
+// in-loop worker being blind to already-routed metal that other nets own. This
+// counts that set exactly, so the reading can be checked instead of assumed.
+//
+// It is EMPTY. Measured on three designs and 1,210 in-loop worker inits --
+// gcd_nangate45 89, sha256 (26,040 instances) 511, subservient (gf180mcuD) 610
+// -- the count is zero every time, because FlexDRWorker::initNetObjs() builds
+// the worker's OWN drNet set from the SAME queryDRObj(getExtBox(), ...) that
+// initNetsFromDesign would use. Every net holding routed metal in an in-loop
+// worker's extBox is therefore already a net that worker owns, and
+// initDRWorker() loads its shapes. initNetObjs_pathSeg SPLITS a segment at the
+// routeBox boundary rather than clipping it, so the split loses no metal
+// either. The initDesign / initNetsFromDesign asymmetry is real and is not a
+// hole in the geometry: it is the same geometry arriving by the other route.
+//
+// A version of this that LOADED the set was built first and measured on the
+// same three designs: byte-identical DEFs, unchanged DRT-0199 series, no
+// runtime or memory cost, because there was nothing to load. The loading is
+// gone; the counter stays, because it is what turns "the worker sees
+// everything in its tile" from an argument into a number.
+//
+// drt.report_unowned_gc_objects.tcl pins that number at zero. Narrow
+// initNetObjs to the routeBox and 50 of 88 in-loop workers on gcd_nangate45
+// stop owning 763 routed objects, the count leaves zero, and the test fails on
+// exactly that line.
+void FlexGCWorker::Impl::countUnownedDesignObjs(const frDesign* design)
+{
+  auto* drWorker = getDRWorker();
+  if (drWorker == nullptr) {
+    return;
+  }
+  auto* stats = drWorker->getGcVisibilityStats();
+  if (stats == nullptr) {
+    return;
+  }
+  // Membership only -- never iterated, so the pointer hashing cannot make the
+  // router non-deterministic.
+  std::unordered_set<frNet*> owned;
+  owned.reserve(drWorker->getNets().size() * 2 + 1);
+  for (auto& uDRNet : drWorker->getNets()) {
+    owned.insert(uDRNet->getFrNet());
+  }
+
+  std::vector<frBlockObject*> result;
+  design->getRegionQuery()->queryDRObj(getExtBox(), result);
+  uint64_t unowned = 0;
+  for (auto rptr : result) {
+    frNet* net = drObjNet(rptr);
+    if (net == nullptr || owned.find(net) != owned.end()) {
+      continue;
+    }
+    ++unowned;
+  }
+  stats->record(unowned);
+}
+
 // init initializes all nets from frDesign if no drWorker is provided
 void FlexGCWorker::Impl::init(const frDesign* design)
 {
@@ -1055,6 +1117,10 @@ void FlexGCWorker::Impl::init(const frDesign* design)
   initDRWorker();
   if (getDRWorker() == nullptr) {
     initNetsFromDesign(design);
+  } else if (router_cfg_->REPORT_UNOWNED_GC_OBJECTS) {
+    // vibeic fork, MEASUREMENT ONLY, off by default. Counts and returns; the
+    // worker's object set is the same with it on as with it off.
+    countUnownedDesignObjs(design);
   }
   initNets();
   initRegionQuery();

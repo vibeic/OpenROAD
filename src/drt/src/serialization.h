@@ -781,6 +781,7 @@ void RouterConfiguration::serialize(Archive& ar, const unsigned int /*version*/)
   (ar) & DO_PA;
   (ar) & SINGLE_STEP_DR;
   (ar) & SAVE_GUIDE_UPDATES;
+  (ar) & REPORT_UNOWNED_GC_OBJECTS;
 
   (ar) & VIAINPIN_BOTTOMLAYER_NAME;
   (ar) & VIAINPIN_TOPLAYER_NAME;

@@ -38,7 +38,7 @@ proc detailed_route { args } {
       -top_routing_layer -verbose -remote_host -remote_port -shared_volume \
       -cloud_size -min_access_points -repair_pdn_vias -drc_report_iter_step} \
     flags {-disable_via_gen -distributed -clean_patches -no_pin_access \
-           -single_step_dr -save_guide_updates}
+           -single_step_dr -save_guide_updates -report_unowned_gc_objects}
   sta::check_argc_eq0 "detailed_route" $args
 
   set enable_via_gen [expr ![info exists flags(-disable_via_gen)]]
@@ -48,6 +48,14 @@ proc detailed_route { args } {
   # development.  It is not listed in the help string intentionally.
   set single_step_dr [expr [info exists flags(-single_step_dr)]]
   set save_guide_updates [expr [info exists flags(-save_guide_updates)]]
+  # vibeic fork, MEASUREMENT ONLY: report how much already-routed metal sits in
+  # an in-loop GC worker's extBox on nets it does not own. Deliberately NOT in
+  # the define_cmd_args help string above and NOT in README.md -- it is a
+  # measurement switch, not a user option, which is what the -single_step_dr
+  # comment below already describes. sta::define_hidden_cmd_args hides a whole
+  # COMMAND, not one flag of an existing one, so this is how a flag is hidden.
+  set report_unowned_gc_objects \
+    [expr [info exists flags(-report_unowned_gc_objects)]]
 
   if { [info exists keys(-repair_pdn_vias)] } {
     set repair_pdn_vias $keys(-repair_pdn_vias)
@@ -166,7 +174,8 @@ proc detailed_route { args } {
     $via_in_pin_bottom_layer $via_in_pin_top_layer \
     $via_access_layer $or_seed $or_k $verbose \
     $clean_patches $no_pin_access $single_step_dr $min_access_points \
-    $save_guide_updates $repair_pdn_vias $drc_report_iter_step
+    $save_guide_updates $repair_pdn_vias $drc_report_iter_step \
+    $report_unowned_gc_objects
 }
 
 proc detailed_route_num_drvs { args } {

@@ -50,6 +50,14 @@ struct RouterConfiguration
   bool DO_PA = true;
   bool SINGLE_STEP_DR = false;
   bool SAVE_GUIDE_UPDATES = false;
+  // vibeic fork, MEASUREMENT ONLY, DEFAULT OFF. When true, every IN-LOOP FlexGC
+  // worker COUNTS the already-routed design objects inside its extBox that
+  // belong to nets its own FlexDRWorker does not own -- the set the gate at
+  // FlexGC_init.cpp:973 withholds from it -- and DRT-0708 reports the total.
+  // Nothing is loaded and no marker changes: see
+  // FlexGCWorker::Impl::countUnownedDesignObjs for why the loading was built,
+  // measured and then removed.
+  bool REPORT_UNOWNED_GC_OBJECTS = false;
 
   std::string VIAINPIN_BOTTOMLAYER_NAME;
   std::string VIAINPIN_TOPLAYER_NAME;

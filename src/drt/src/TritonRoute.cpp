@@ -1866,6 +1866,42 @@ void TritonRoute::reportNsMetalRepairOutcome(int ns_metal_after)
   }
 }
 
+// vibeic fork: MEASUREMENT ONLY, debug-gated, changes no behaviour.
+//
+// DRT-0701 says "N violation(s) that the routing loop did not report (M
+// in-loop)". Those N are counted AFTER patchMinAreaViolations() and
+// patchNonSufficientMetalViolations() have committed new metal, so N - M mixes
+// two unrelated causes: what a whole-design pass sees that the tiled ripup loop
+// did not, and what the repair passes themselves introduced. This reports the
+// middle number -- the whole-design view of the geometry the LOOP finished
+// with -- so the two can be separated. Costs one extra whole-design GC pass,
+// and only when asked for.
+void TritonRoute::reportPreRepairDrc()
+{
+  if (!logger_->debugCheck(utl::DRT, "verifysplit", 1)) {
+    return;
+  }
+  frDesign* design = getDesign();
+  if (design == nullptr) {
+    return;
+  }
+  frBlock* block = design->getTopBlock();
+  frRegionQuery* rq = design->getRegionQuery();
+  if (block == nullptr || rq == nullptr
+      || block->getGCellPatterns().size() < 2) {
+    return;
+  }
+  const int in_loop = block->getNumMarkers();
+  rq->initDRObj();
+  frList<std::unique_ptr<frMarker>> markers;
+  getDRCMarkers(markers, block->getBBox());
+  logger_->debug(utl::DRT,
+                 "verifysplit",
+                 "VERIFYSPLIT in_loop={} whole_design_before_repairs={}",
+                 in_loop,
+                 (int) markers.size());
+}
+
 int TritonRoute::verifyRoute()
 {
   frDesign* design = getDesign();
@@ -2066,6 +2102,7 @@ int TritonRoute::main()
   // rectangles here, AFTER routing has fully converged, so we never re-enter
   // the ripup loop. Purely additive metal on the owning signal net.
   if (!router_cfg_->SINGLE_STEP_DR) {
+    reportPreRepairDrc();
     patchMinAreaViolations();
     // Same shape, same moment: additive, post-convergence, never re-entering
     // the ripup loop. verifyRoute() below re-runs the whole-design check and so
@@ -2411,6 +2448,7 @@ void TritonRoute::setParams(const ParamStruct& params)
   router_cfg_->SAVE_GUIDE_UPDATES = params.saveGuideUpdates;
   router_cfg_->REPAIR_PDN_LAYER_NAME = params.repairPDNLayerName;
   router_cfg_->MAX_THREADS = params.num_threads;
+  router_cfg_->REPORT_UNOWNED_GC_OBJECTS = params.reportUnownedGcObjects;
 }
 
 void TritonRoute::addWorkerResults(
