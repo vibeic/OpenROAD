@@ -1287,6 +1287,15 @@ bool findMinAreaPatch(const odb::Rect& pad,
 // Returns the number of junctions patched.
 int TritonRoute::patchNonSufficientMetalViolations()
 {
+  // Clear the scoreboard BEFORE any early return. It is a member, so it
+  // outlives the call: if a first route fills it in and a second one bails out
+  // here (no gcell grid, torn-down design), a stale `ran = true` would make
+  // reportNsMetalRepairOutcome quote the FIRST route's numbers as if they
+  // described the second. Two routes in one session is not hypothetical in this
+  // codebase -- it is the exact shape of vibeic/OpenROAD#9.
+  NsMetalRepairStats& st = ns_metal_repair_stats_;
+  st = NsMetalRepairStats{};
+
   frDesign* design = getDesign();
   if (design == nullptr) {
     return 0;
@@ -1311,8 +1320,6 @@ int TritonRoute::patchNonSufficientMetalViolations()
   const frCoord mgrid = std::max<frCoord>(1, tech->getManufacturingGrid());
 
   std::vector<std::pair<odb::Rect, frNet*>> added_patches;
-  NsMetalRepairStats& st = ns_metal_repair_stats_;
-  st = NsMetalRepairStats{};
   st.ran = true;
   int patched = 0;
   int unresolved = 0;
@@ -1831,10 +1838,14 @@ int TritonRoute::patchMinAreaViolations()
 // hide exactly the case DRT-0707 is here to surface.
 void TritonRoute::reportNsMetalRepairOutcome(int ns_metal_after)
 {
-  const NsMetalRepairStats& ns = ns_metal_repair_stats_;
+  NsMetalRepairStats& ns = ns_metal_repair_stats_;
   if (!ns.ran || ns.handed <= 0) {
     return;
   }
+  // Report once per repair. Without this a later verifyRoute() or check_drc in
+  // the same session -- with no repair in between -- would re-emit numbers that
+  // describe an earlier pass.
+  ns.ran = false;
   const int cleared = ns.before - ns_metal_after;
   logger_->info(DRT,
                 706,
