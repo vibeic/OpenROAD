@@ -22,15 +22,26 @@ class frMarker : public frFig
   // constructors
   frMarker() = default;
   frMarker& operator=(const frMarker&) = default;
-  frMarker(const frMarker& in)
-      : constraint_(in.constraint_),
-        bbox_(in.bbox_),
-        layerNum_(in.layerNum_),
-        srcs_(in.srcs_),
-        vioHasDir_(in.vioHasDir_),
-        vioIsH_(in.vioIsH_)
-  {
-  }
+  // A hand-written copy constructor used to sit here that copied constraint_,
+  // bbox_, layerNum_, srcs_, vioHasDir_ and vioIsH_ and silently dropped
+  // victims_ and aggressors_ -- the two rectangles that say what the violation
+  // is BETWEEN -- while the copy-assignment above kept them.
+  //
+  // Every marker that reaches the design is copy-CONSTRUCTED, never assigned:
+  // TritonRoute::getDRCMarkers, FlexDRWorker::endAddMarkers and
+  // FlexDRWorker::setMarkers all do. So the block's markers, the DRC report and
+  // the GUI marker browser carried no victim and no aggressor, and
+  // FlexDRWorker::route_queue_update_from_marker's movableAggressorNets loop --
+  // reached from route_queue_init_queue, which iterates that copied set --
+  // could never fire. Measured: rqi_aggr = 0 in every iteration of
+  // gcd_nangate45, sha256 and subservient, while the same run's uncopied path
+  // (route_queue_update_queue on the GC worker's own unique_ptrs) reported
+  // rq_aggr equal to rq_markers.
+  //
+  // The two copies also disagreed, and std::vector chooses between them by
+  // capacity, so `bestMarkers_ = markers_` could give different contents for
+  // the same input.
+  frMarker(const frMarker&) = default;
   // setters
   void setConstraint(frConstraint* constraintIn) { constraint_ = constraintIn; }
 

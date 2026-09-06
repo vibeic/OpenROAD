@@ -117,6 +117,21 @@ struct GcVisibilityStats
   std::atomic<uint64_t> setmarkers_kept{0};
   std::atomic<uint64_t> setmarkers_dropped{0};
 
+  // ordrv4: what route_queue_update_from_marker actually gets handed.
+  // frMarker's copy constructor drops victims_ and aggressors_ while its
+  // copy-assignment keeps them, and every marker reaching
+  // FlexDRWorker::markers_ is copy-CONSTRUCTED -- so the aggressor branch may
+  // never have run in practice.
+  std::atomic<uint64_t> rq_markers{0};
+  std::atomic<uint64_t> rq_markers_with_aggressors{0};
+  std::atomic<uint64_t> rq_markers_with_victims{0};
+  std::atomic<uint64_t> rq_movable_aggressor_nets{0};
+  // Split by entry point. route_queue_init_queue feeds markers_, which is the
+  // COPIED set; route_queue_update_queue is handed the GC worker's ORIGINAL
+  // unique_ptrs. Only the first can be affected by the copy constructor.
+  std::atomic<uint64_t> rqi_markers{0};
+  std::atomic<uint64_t> rqi_markers_with_aggressors{0};
+
   void resetWriteback()
   {
     markers_written.store(0, std::memory_order_relaxed);
@@ -124,11 +139,40 @@ struct GcVisibilityStats
     markers_removed.store(0, std::memory_order_relaxed);
     setmarkers_kept.store(0, std::memory_order_relaxed);
     setmarkers_dropped.store(0, std::memory_order_relaxed);
+    rqi_markers.store(0, std::memory_order_relaxed);
+    rqi_markers_with_aggressors.store(0, std::memory_order_relaxed);
+    rq_markers.store(0, std::memory_order_relaxed);
+    rq_markers_with_aggressors.store(0, std::memory_order_relaxed);
+    rq_markers_with_victims.store(0, std::memory_order_relaxed);
+    rq_movable_aggressor_nets.store(0, std::memory_order_relaxed);
   }
 
   void recordRemovals(uint64_t removed)
   {
     markers_removed.fetch_add(removed, std::memory_order_relaxed);
+  }
+
+  void recordRouteQueueInitMarker(bool has_aggressors)
+  {
+    rqi_markers.fetch_add(1, std::memory_order_relaxed);
+    if (has_aggressors) {
+      rqi_markers_with_aggressors.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
+
+  void recordRouteQueueMarker(bool has_aggressors,
+                              bool has_victims,
+                              uint64_t movable_aggressor_nets)
+  {
+    rq_markers.fetch_add(1, std::memory_order_relaxed);
+    if (has_aggressors) {
+      rq_markers_with_aggressors.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (has_victims) {
+      rq_markers_with_victims.fetch_add(1, std::memory_order_relaxed);
+    }
+    rq_movable_aggressor_nets.fetch_add(movable_aggressor_nets,
+                                        std::memory_order_relaxed);
   }
 
   void recordSetMarkers(uint64_t kept, uint64_t dropped)

@@ -239,6 +239,27 @@ cc_test(
 )
 
 test_suite(
+    name = "fr_marker_copy_test",
+    tests = [":fr_marker_copy_unittest"],
+)
+
+cc_test(
+    name = "fr_marker_copy_unittest",
+    srcs = ["frMarkerCopyTest.cpp"],
+    includes = [
+        "../src",
+    ],
+    deps = [
+        "//src/drt:base_types",
+        "//src/drt:db_hdrs",
+        "//src/drt:drt_private_hdrs",
+        "//src/odb/src/db",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+test_suite(
     name = "routing_via_connectivity_test",
     tests = [":routing_via_connectivity_unittest"],
 )
