@@ -1969,6 +1969,17 @@ int TritonRoute::verifyRoute()
   // What the repair pass actually achieved, measured by the checker.
   reportNsMetalRepairOutcome(ns_metal_after);
 
+  // vibeic fork: the count AFTER the repair passes and this verification -- the
+  // same number DRT-0701/DRT-0702 print one line below. `route__drc_errors` is
+  // emitted by FlexDR::end() at the end of the ripup loop, BEFORE
+  // patchMinAreaViolations(), patchNonSufficientMetalViolations() and this
+  // function, so a consumer that compares that metric against prose parsed from
+  // the log is comparing an in-loop number with a final one. A subservient run
+  // whose phase-3 gate refused did exactly that: route__drc_errors = 1, the
+  // loop's own DRT-0199, against DRT-0702 = 0. This publishes the final number
+  // under its own name; the existing metric keeps its meaning and its value.
+  logger_->metric("route__drc_errors_final", verified);
+
   if (verified > in_loop) {
     logger_->warn(DRT,
                   701,
