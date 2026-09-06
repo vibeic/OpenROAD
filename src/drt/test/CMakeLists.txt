@@ -9,6 +9,8 @@ or_integration_tests(
     ndr_vias2
     ndr_vias3
     ndr_no_auto_taper
+    ns_metal_repair
+    ns_metal_repair_blocked
     obstruction
     pa_single_pin
     single_step

@@ -1287,6 +1287,15 @@ bool findMinAreaPatch(const odb::Rect& pad,
 // Returns the number of junctions patched.
 int TritonRoute::patchNonSufficientMetalViolations()
 {
+  // Clear the scoreboard BEFORE any early return. It is a member, so it
+  // outlives the call: if a first route fills it in and a second one bails out
+  // here (no gcell grid, torn-down design), a stale `ran = true` would make
+  // reportNsMetalRepairOutcome quote the FIRST route's numbers as if they
+  // described the second. Two routes in one session is not hypothetical in this
+  // codebase -- it is the exact shape of vibeic/OpenROAD#9.
+  NsMetalRepairStats& st = ns_metal_repair_stats_;
+  st = NsMetalRepairStats{};
+
   frDesign* design = getDesign();
   if (design == nullptr) {
     return 0;
@@ -1311,6 +1320,7 @@ int TritonRoute::patchNonSufficientMetalViolations()
   const frCoord mgrid = std::max<frCoord>(1, tech->getManufacturingGrid());
 
   std::vector<std::pair<odb::Rect, frNet*>> added_patches;
+  st.ran = true;
   int patched = 0;
   int unresolved = 0;
 
@@ -1321,9 +1331,12 @@ int TritonRoute::patchNonSufficientMetalViolations()
                != frConstraintTypeEnum::frcNonSufficientMetalConstraint) {
       continue;
     }
+    ++st.handed;
     const frLayerNum lNum = marker->getLayerNum();
     frLayer* layer = tech->getLayer(lNum);
     if (layer == nullptr || layer->getType() != dbTechLayerType::ROUTING) {
+      ++st.not_routing;
+      ++unresolved;
       continue;
     }
     const frCoord min_width = std::max<frCoord>(1, layer->getMinWidth());
@@ -1341,11 +1354,17 @@ int TritonRoute::patchNonSufficientMetalViolations()
       }
     }
     if (net == nullptr || net->isFixed() || net->isSpecial()) {
-      continue;  // nothing this pass may add metal to
+      // Nothing this pass may add metal to. It is still a marker that will be
+      // there afterwards, so it is counted, never silently dropped.
+      ++st.no_owner;
+      ++unresolved;
+      continue;
     }
 
     const odb::Rect neck = marker->getBBox();
     if (neck.dx() >= min_width && neck.dy() >= min_width) {
+      ++st.not_a_neck;
+      ++unresolved;
       continue;  // not a neck we can explain; leave it reported
     }
 
@@ -1440,6 +1459,7 @@ int TritonRoute::patchNonSufficientMetalViolations()
     const frCoord dyl = std::min(room(1, -1), want);
     const frCoord dyh = std::min(room(1, 1), want);
     if (dxl < want || dxh < want || dyl < want || dyh < want) {
+      ++st.no_room;
       ++unresolved;
       continue;
     }
@@ -1451,6 +1471,7 @@ int TritonRoute::patchNonSufficientMetalViolations()
     if (grown.xMin() >= grown.xMax() || grown.yMin() >= grown.yMax()
         || grown.dx() < min_width || grown.dy() < min_width
         || !die.contains(grown)) {
+      ++st.degenerate;
       ++unresolved;
       continue;
     }
@@ -1467,13 +1488,24 @@ int TritonRoute::patchNonSufficientMetalViolations()
     ++patched;
   }
 
-  if (patched > 0 || unresolved > 0) {
+  st.patched = patched;
+  st.before = st.handed;
+  if (st.handed > 0) {
+    // Report what it was HANDED and why each refusal happened. "widened" is not
+    // "cleared": reportNsMetalRepairOutcome() supplies that, from the checker.
     logger_->info(DRT,
                   703,
-                  "Post-route non-sufficient-metal repair: widened {} "
-                  "same-net junction(s) to MINWIDTH, {} left unresolved.",
+                  "Post-route non-sufficient-metal repair: handed {} junction(s); "
+                  "widened {}; left {} unresolved (no_room {}, degenerate {}, "
+                  "not_a_neck {}, no_owner {}, not_routing {}).",
+                  st.handed,
                   patched,
-                  unresolved);
+                  unresolved,
+                  st.no_room,
+                  st.degenerate,
+                  st.not_a_neck,
+                  st.no_owner,
+                  st.not_routing);
   }
   return patched;
 }
@@ -1789,6 +1821,51 @@ int TritonRoute::patchMinAreaViolations()
   return total_patched;
 }
 
+// vibeic fork: the only honest report of what the NS-Metal repair achieved.
+//
+// patchNonSufficientMetalViolations() knows what it PATCHED. Whether the design
+// got better is a different question, and only a whole-design pass taken AFTER
+// the repair can answer it. Both callers already hold such a count, so this
+// costs no extra GC pass.
+//
+// DRT-0707 exists because the pass's own DRT-0703 line cannot detect its own
+// worst failure mode. Measured on a deliberately broken build: DRT-0703 read
+// "widened 1 ... left 0 unresolved" while the design went from 1 violation to 3,
+// because the patches it added were themselves below MINWIDTH. A repair pass
+// that always reports success is the defect one level up.
+//
+// `cleared` is deliberately allowed to go NEGATIVE. Clamping it at zero would
+// hide exactly the case DRT-0707 is here to surface.
+void TritonRoute::reportNsMetalRepairOutcome(int ns_metal_after)
+{
+  NsMetalRepairStats& ns = ns_metal_repair_stats_;
+  if (!ns.ran || ns.handed <= 0) {
+    return;
+  }
+  // Report once per repair. Without this a later verifyRoute() or check_drc in
+  // the same session -- with no repair in between -- would re-emit numbers that
+  // describe an earlier pass.
+  ns.ran = false;
+  const int cleared = ns.before - ns_metal_after;
+  logger_->info(DRT,
+                706,
+                "NS-Metal repair outcome: handed {}, cleared {}, still present "
+                "{} (the pass widened {}).",
+                ns.handed,
+                cleared,
+                ns_metal_after,
+                ns.patched);
+  if (ns_metal_after > ns.before) {
+    logger_->warn(DRT,
+                  707,
+                  "NS-Metal repair INCREASED the violation count from {} to {}. "
+                  "The patches it added are themselves insufficient metal. "
+                  "Treat DRT-0703's widened count as unreliable for this run.",
+                  ns.before,
+                  ns_metal_after);
+  }
+}
+
 int TritonRoute::verifyRoute()
 {
   frDesign* design = getDesign();
@@ -1818,6 +1895,20 @@ int TritonRoute::verifyRoute()
   getDRCMarkers(markers, block->getBBox());
   const int verified = static_cast<int>(markers.size());
 
+  // The NS-Metal repair pass ran just before this and knows only what it
+  // PATCHED. This marker set is the only thing that knows what it CLEARED, and
+  // it costs nothing extra: it has already been computed. Count it here, before
+  // the swap below moves the markers into the block.
+  int ns_metal_after = 0;
+  for (const auto& marker : markers) {
+    auto* con = marker->getConstraint();
+    if (con != nullptr
+        && con->typeId()
+               == frConstraintTypeEnum::frcNonSufficientMetalConstraint) {
+      ++ns_metal_after;
+    }
+  }
+
   // Replace the block's marker set with the verified one so
   // detailed_route_num_drvs, the GUI marker browser and the DRC report all
   // quote the same number, and that number describes the finished route.
@@ -1837,6 +1928,9 @@ int TritonRoute::verifyRoute()
       block->addMarker(std::move(marker));
     }
   }
+
+  // What the repair pass actually achieved, measured by the checker.
+  reportNsMetalRepairOutcome(ns_metal_after);
 
   if (verified > in_loop) {
     logger_->warn(DRT,
@@ -2167,6 +2261,86 @@ void TritonRoute::checkDRC(const char* filename,
   frList<std::unique_ptr<frMarker>> markers;
   getDRCMarkers(markers, requiredDrcBox);
   reportDRC(filename, markers, marker_name, requiredDrcBox);
+}
+
+// vibeic fork: TEST/DIAGNOSTIC ENTRY POINT for the post-route NS-Metal repair.
+//
+// patchNonSufficientMetalViolations() runs only from inside TritonRoute::main(),
+// after the ripup loop converges. That makes it untestable except through a
+// full detailed_route, and it landed (vibeic/OpenROAD#13) with no regression
+// test at all. This entry point runs the SAME production function against an
+// already-routed design, using checkDRC's setup verbatim, and reports:
+//
+//   before   NS-Metal markers a whole-design pass finds on the input
+//   patched  what the repair says it fixed
+//   after    NS-Metal markers a whole-design pass finds on the RESULT
+//
+// Reporting all three in one line is deliberate. A repair pass that always
+// claims success is the defect one level up, and `patched` alone cannot tell
+// "cleared it" from "moved it": only `after`, measured by the checker rather
+// than by the repair, can. `after > before` means the pass manufactured
+// violations -- which is exactly the v2 failure #13's own commit message
+// records (2 -> 3), and which no test existed to catch.
+//
+// The surviving markers are written to `filename` in the same format checkDRC
+// uses, so a junction the pass correctly REFUSES to repair stays visible and
+// diffable rather than disappearing into a count.
+void TritonRoute::repairNonSufficientMetal(const char* filename,
+                                           int num_threads)
+{
+  router_cfg_->GC_IGNORE_PDN_LAYER_NUM = -1;
+  router_cfg_->REPAIR_PDN_LAYER_NUM = -1;
+  router_cfg_->MAX_THREADS = num_threads;
+  initDesign();
+  auto gcellGrid = db_->getChip()->getBlock()->getGCellGrid();
+  if (gcellGrid != nullptr && gcellGrid->getNumGridPatternsX() == 1
+      && gcellGrid->getNumGridPatternsY() == 1) {
+    io::GuideProcessor guide_processor(
+        getDesign(), db_, logger_, router_cfg_.get());
+    guide_processor.readGuides();
+    guide_processor.buildGCellPatterns();
+  } else if (!initGuide()) {
+    logger_->error(DRT, 705, "GCELLGRID is undefined");
+  }
+
+  const odb::Rect box = design_->getTopBlock()->getBBox();
+
+  auto count_ns_metal = [](const frList<std::unique_ptr<frMarker>>& ms) {
+    int n = 0;
+    for (const auto& m : ms) {
+      auto* con = m->getConstraint();
+      if (con != nullptr
+          && con->typeId()
+                 == frConstraintTypeEnum::frcNonSufficientMetalConstraint) {
+        ++n;
+      }
+    }
+    return n;
+  };
+
+  design_->getRegionQuery()->initDRObj();
+  frList<std::unique_ptr<frMarker>> before;
+  getDRCMarkers(before, box);
+  const int n_before = count_ns_metal(before);
+
+  const int patched = patchNonSufficientMetalViolations();
+
+  design_->getRegionQuery()->initDRObj();
+  frList<std::unique_ptr<frMarker>> after;
+  getDRCMarkers(after, box);
+  const int n_after = count_ns_metal(after);
+
+  logger_->info(DRT,
+                704,
+                "NS-Metal repair check: before={} patched={} after={}.",
+                n_before,
+                patched,
+                n_after);
+  // Same reporting path production takes, so DRT-0706/0707 are reachable from a
+  // regression test instead of only from a full detailed_route.
+  reportNsMetalRepairOutcome(n_after);
+
+  reportDRC(filename, after, "DRC", box);
 }
 
 void TritonRoute::addUserSelectedVia(const std::string& viaName)

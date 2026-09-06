@@ -32,6 +32,7 @@
 #include "odb/dbTransform.h"
 #include "odb/dbTypes.h"
 #include "odb/geom.h"
+#include "utl/Logger.h"
 
 using odb::dbTechLayerType;
 
@@ -962,6 +963,88 @@ void FlexGCWorker::Impl::initRegionQuery()
   getWorkerRegionQuery().init(getTech()->getLayers().size());
 }
 
+namespace {
+// The DR-object region query holds exactly three shape kinds (see
+// frRegionQuery::Impl::initDRObj): path segments, vias and patch wires.
+frNet* drObjNet(frBlockObject* obj)
+{
+  if (obj == nullptr) {
+    return nullptr;
+  }
+  switch (obj->typeId()) {
+    case frcPathSeg:
+    case frcVia:
+    case frcPatchWire: {
+      auto* s = static_cast<frPinFig*>(obj);
+      return s->hasNet() ? s->getNet() : nullptr;
+    }
+    default:
+      return nullptr;
+  }
+}
+}  // namespace
+
+// vibeic fork: MEASUREMENT ONLY. Debug-gated; changes no behaviour.
+//
+// vibeic-eda#153 records the in-loop/whole-design object-set asymmetry as
+// NOT_MEASURED ("the exact FlexGC set-op ... the fork was not built"). This
+// makes it measurable on any real design instead of inferred from the source.
+//
+// It also pins down WHICH gate does it, because the dossier and
+// vibeic/OpenROAD#12's follow-up both name the wrong one. They cite
+// `initDesign`'s `if (getDRWorker() || skipDR) { return; }`. On the routing
+// path that return is UNCONDITIONAL -- init() below calls
+// `initDesign(design, /*skipDR=*/true)`, so skipDR alone already returns and
+// getDRWorker() is never consulted. The gate that actually starves the in-loop
+// worker is the `if (getDRWorker() == nullptr)` around initNetsFromDesign()
+// in init(): a whole-design worker loads every routed shape in its extBox, an
+// in-loop worker loads none of them and sees only the drNets its own DR worker
+// is modifying.
+void FlexGCWorker::Impl::logDesignObjCoverage(const frDesign* design)
+{
+  if (!logger_->debugCheck(utl::DRT, "gcinit", 1)) {
+    return;
+  }
+  const bool in_loop = (getDRWorker() != nullptr);
+  const auto& extBox = getExtBox();
+  box_t queryBox(point_t(extBox.xMin(), extBox.yMin()),
+                 point_t(extBox.xMax(), extBox.yMax()));
+  auto* regionQuery = design->getRegionQuery();
+  frRegionQuery::Objects<frBlockObject> queryResult;
+  int design_dr_objs = 0;
+  std::set<frNet*> design_dr_nets;
+  for (auto i = getTech()->getBottomLayerNum();
+       i <= getTech()->getTopLayerNum();
+       i++) {
+    queryResult.clear();
+    regionQuery->queryDRObj(queryBox, i, queryResult);
+    for (auto& [box, obj] : queryResult) {
+      if (initDesign_skipObj(obj)) {
+        continue;
+      }
+      ++design_dr_objs;
+      if (frNet* net = drObjNet(obj)) {
+        design_dr_nets.insert(net);
+      }
+    }
+  }
+  logger_->debug(utl::DRT,
+                 "gcinit",
+                 "GCinit worker={} extBox=({},{})-({},{}) "
+                 "design_DR_objs_in_extBox={} over {} net(s) "
+                 "initNetsFromDesign={} owned_drNets={} gc_nets={}",
+                 in_loop ? "IN-LOOP" : "WHOLE-DESIGN",
+                 extBox.xMin(),
+                 extBox.yMin(),
+                 extBox.xMax(),
+                 extBox.yMax(),
+                 design_dr_objs,
+                 design_dr_nets.size(),
+                 in_loop ? "SKIPPED" : "RAN",
+                 in_loop ? (int) getDRWorker()->getNets().size() : 0,
+                 (int) getNets().size());
+}
+
 // init initializes all nets from frDesign if no drWorker is provided
 void FlexGCWorker::Impl::init(const frDesign* design)
 {
@@ -975,6 +1058,7 @@ void FlexGCWorker::Impl::init(const frDesign* design)
   }
   initNets();
   initRegionQuery();
+  logDesignObjCoverage(design);
 }
 
 // init initializes all nets from frDesign if no drWorker is provided

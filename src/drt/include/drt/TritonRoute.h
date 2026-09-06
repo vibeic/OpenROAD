@@ -189,6 +189,48 @@ class TritonRoute : public PinAccessService
   // the maze router. Returns the number of polygons patched.
   int patchMinAreaViolations();
   int patchNonSufficientMetalViolations();
+  // vibeic fork: what the NS-Metal repair pass was handed and what became of it.
+  //
+  // The pass used to report only the number it PATCHED. That is not the number it
+  // CLEARED, and the difference is not academic: a patch that lands without
+  // satisfying the rule it repairs manufactures new markers, and a report built
+  // from the patch count calls that a success. Measured on a deliberately broken
+  // build: "widened 1 ... 0 left unresolved" while the design went 1 -> 3.
+  //
+  // So the pass records what it was handed and why each junction it did not
+  // widen was refused, and verifyRoute() -- which recomputes the whole-design
+  // marker set immediately afterwards anyway, at no extra cost -- supplies the
+  // only honest "cleared" number and contradicts the pass if it made things worse.
+  struct NsMetalRepairStats
+  {
+    bool ran{false};
+    int handed{0};        // NS-Metal markers the pass was given
+    int patched{0};       // junctions it widened
+    int no_room{0};       // could not reach a full MINWIDTH on some side
+    int degenerate{0};    // grown box empty/undersized/outside the die
+    int not_a_neck{0};    // marker already >= MINWIDTH on both axes
+    int no_owner{0};      // no signal net to add metal to (fixed/special/none)
+    int not_routing{0};   // marker not on a routing layer
+    int before{0};        // NS-Metal count the pass saw on entry
+  };
+  const NsMetalRepairStats& getNsMetalRepairStats() const
+  {
+    return ns_metal_repair_stats_;
+  }
+  // Emit DRT-0706 (and DRT-0707 if the repair made things worse) from a
+  // whole-design NS-Metal count taken AFTER the pass. Shared by verifyRoute()
+  // and by the test entry point so both report the same way and the warning is
+  // reachable from a regression test.
+  void reportNsMetalRepairOutcome(int ns_metal_after);
+  // vibeic fork: run the post-route NS-Metal repair on an ALREADY ROUTED
+  // design and re-verify, without re-entering detailed_route. This is the
+  // only way patchNonSufficientMetalViolations can be regression-tested:
+  // it otherwise runs solely from inside TritonRoute::main(), which needs a
+  // full route. Mirrors checkDRC's setup exactly, then reports before/after
+  // marker counts and writes the SURVIVING markers to `filename`, so a pass
+  // that silently repairs nothing and a pass that manufactures new violations
+  // are both visible in the same output.
+  void repairNonSufficientMetal(const char* filename, int num_threads);
   // vibeic fork: post-route whole-design DRC VERIFICATION.
   //
   // The number detailed_route publishes today is the residual in-loop marker
@@ -211,6 +253,7 @@ class TritonRoute : public PinAccessService
   void updateDirtyPAData();
 
  private:
+  NsMetalRepairStats ns_metal_repair_stats_;
   std::unique_ptr<frDesign> design_;
   std::unique_ptr<frDebugSettings> debug_;
   std::unique_ptr<DesignCallBack> db_callback_;
