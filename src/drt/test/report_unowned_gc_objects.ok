@@ -68,4 +68,4 @@
 [INFO DRT-0036] via9 guide region query size = 0.
 [INFO DRT-0036] metal10 guide region query size = 0.
 [INFO DRT-0179] Init gr pin query.
-[INFO DRT-0708] gc_sees_routed: 89 in-loop GC worker init(s); 0 of them loaded already-routed metal they do not own; 0 object(s) total, worst single init 0.
+[INFO DRT-0708] unowned_gc_objects: 89 in-loop GC worker init(s); 0 of them had already-routed metal in extBox on nets they do not own; 0 object(s) total, worst single init 0.

@@ -1047,38 +1047,43 @@ void FlexGCWorker::Impl::logDesignObjCoverage(const frDesign* design)
                  (int) getNets().size());
 }
 
-// vibeic fork: THE ROOT CAUSE, behind RouterConfiguration::GC_SEES_ROUTED.
+// vibeic fork: MEASUREMENT ONLY, behind
+// RouterConfiguration::REPORT_UNOWNED_GC_OBJECTS. Counts; loads nothing.
 //
-// logDesignObjCoverage() above measures the defect; this closes it. An in-loop
-// GC worker is built from its FlexDRWorker's drNets only, so already-routed
-// metal belonging to OTHER nets inside the same extBox -- nets finished in an
-// earlier iteration and not touched since -- is invisible to it. Measured on
-// this branch: gcd_nangate45 89/89 in-loop workers skip that set, worst 503
-// objects; sha256 (26,040 instances) 511/511, worst 3,145 objects over 266 nets
-// while the worker owned 277 nets of its own. The ripup loop can therefore
-// converge while violations it never checked stand, and the post-route
-// whole-design pass then reports them (DRT-0701).
+// logDesignObjCoverage() above shows that an in-loop GC worker skips
+// initNetsFromDesign while a whole-design worker runs it, which reads like the
+// in-loop worker being blind to already-routed metal that other nets own. This
+// counts that set exactly, so the reading can be checked instead of assumed.
 //
-// This loads exactly that missing set and nothing else.
+// It is EMPTY. Measured on three designs and 1,210 in-loop worker inits --
+// gcd_nangate45 89, sha256 (26,040 instances) 511, subservient (gf180mcuD) 610
+// -- the count is zero every time, because FlexDRWorker::initNetObjs() builds
+// the worker's OWN drNet set from the SAME queryDRObj(getExtBox(), ...) that
+// initNetsFromDesign would use. Every net holding routed metal in an in-loop
+// worker's extBox is therefore already a net that worker owns, and
+// initDRWorker() loads its shapes. initNetObjs_pathSeg SPLITS a segment at the
+// routeBox boundary rather than clipping it, so the split loses no metal
+// either. The initDesign / initNetsFromDesign asymmetry is real and is not a
+// hole in the geometry: it is the same geometry arriving by the other route.
 //
-// Nets the DR worker OWNS are excluded, and that exclusion is load-bearing, not
-// tidiness: initDRWorker() has already loaded this worker's LIVE, in-progress
-// copy of those nets, while the design's region query still holds the PREVIOUS
-// iteration's shapes for the same nets until end() writes back. Loading both
-// would check a net against a stale copy of itself.
+// A version of this that LOADED the set was built first and measured on the
+// same three designs: byte-identical DEFs, unchanged DRT-0199 series, no
+// runtime or memory cost, because there was nothing to load. The loading is
+// gone; the counter stays, because it is what turns "the worker sees
+// everything in its tile" from an argument into a number.
 //
-// Cost: one extBox-wide queryDRObj plus gcNet polygon/edge/corner/max-rectangle
-// construction for the foreign nets, per in-loop worker init. That is the
-// number logDesignObjCoverage reports, and it is why this is a flag and not the
-// default.
-//
-// Safe under threading for the same reason initNetsFromDesign is: within an
-// OpenMP batch the design's region query is read-only -- writes happen in
-// FlexDRWorker::end(), which FlexDR runs serially after the batch.
-void FlexGCWorker::Impl::initUnownedNetsFromDesign(const frDesign* design)
+// drt.report_unowned_gc_objects.tcl pins that number at zero. Narrow
+// initNetObjs to the routeBox and 50 of 88 in-loop workers on gcd_nangate45
+// stop owning 763 routed objects, the count leaves zero, and the test fails on
+// exactly that line.
+void FlexGCWorker::Impl::countUnownedDesignObjs(const frDesign* design)
 {
   auto* drWorker = getDRWorker();
   if (drWorker == nullptr) {
+    return;
+  }
+  auto* stats = drWorker->getGcVisibilityStats();
+  if (stats == nullptr) {
     return;
   }
   // Membership only -- never iterated, so the pointer hashing cannot make the
@@ -1090,39 +1095,16 @@ void FlexGCWorker::Impl::initUnownedNetsFromDesign(const frDesign* design)
   }
 
   std::vector<frBlockObject*> result;
-  std::map<gcNet*, std::vector<frPatchWire*>> pwires;
   design->getRegionQuery()->queryDRObj(getExtBox(), result);
-  uint64_t loaded = 0;
+  uint64_t unowned = 0;
   for (auto rptr : result) {
     frNet* net = drObjNet(rptr);
     if (net == nullptr || owned.find(net) != owned.end()) {
       continue;
     }
-    ++loaded;
-    if (rptr->typeId() == frcPatchWire) {
-      auto cptr = static_cast<frPatchWire*>(rptr);
-      auto gNet = initRouteObj(cptr);
-      pwires[gNet].push_back(cptr);
-    } else {
-      initRouteObj(rptr);
-    }
+    ++unowned;
   }
-  // Same non-tapered bookkeeping initNetsFromDesign does for patch wires.
-  for (const auto& [gNet, patches] : pwires) {
-    for (auto pwire : patches) {
-      odb::Rect box = pwire->getBBox();
-      int z = pwire->getLayerNum() / 2 - 1;
-      for (auto& nt : gNet->getNonTaperedRects(z)) {
-        if (nt.intersects(box)) {
-          gNet->addNonTaperedRect(box, z);
-          break;
-        }
-      }
-    }
-  }
-  if (auto* stats = drWorker->getGcVisibilityStats()) {
-    stats->record(loaded);
-  }
+  stats->record(unowned);
 }
 
 // init initializes all nets from frDesign if no drWorker is provided
@@ -1135,11 +1117,10 @@ void FlexGCWorker::Impl::init(const frDesign* design)
   initDRWorker();
   if (getDRWorker() == nullptr) {
     initNetsFromDesign(design);
-  } else if (router_cfg_->GC_SEES_ROUTED) {
-    // vibeic fork, EXPERIMENT, off by default. Everything above this line and
-    // everything below it is untouched; with the flag off this branch does not
-    // exist and the routing path is byte-identical.
-    initUnownedNetsFromDesign(design);
+  } else if (router_cfg_->REPORT_UNOWNED_GC_OBJECTS) {
+    // vibeic fork, MEASUREMENT ONLY, off by default. Counts and returns; the
+    // worker's object set is the same with it on as with it off.
+    countUnownedDesignObjs(design);
   }
   initNets();
   initRegionQuery();

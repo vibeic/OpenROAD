@@ -2448,7 +2448,7 @@ void TritonRoute::setParams(const ParamStruct& params)
   router_cfg_->SAVE_GUIDE_UPDATES = params.saveGuideUpdates;
   router_cfg_->REPAIR_PDN_LAYER_NAME = params.repairPDNLayerName;
   router_cfg_->MAX_THREADS = params.num_threads;
-  router_cfg_->GC_SEES_ROUTED = params.gcSeesRouted;
+  router_cfg_->REPORT_UNOWNED_GC_OBJECTS = params.reportUnownedGcObjects;
 }
 
 void TritonRoute::addWorkerResults(

@@ -79,7 +79,7 @@ struct FlexDRViaData
 
 class FlexDRFlow;
 
-// vibeic fork: what -gc_sees_routed actually did, counted over the whole run.
+// vibeic fork: what -report_unowned_gc_objects counted over the whole run.
 // Owned by FlexDR (constructed fresh per detailed_route, so there is no stale
 // state to carry into a second route in the same session); the workers hold a
 // bare pointer to it and a deserialized distributed worker holds nullptr.
@@ -200,7 +200,7 @@ class FlexDR
 
   void reportGuideCoverage();
   void incIter() { ++iter_; }
-  // vibeic fork: -gc_sees_routed bookkeeping, see GcVisibilityStats.
+  // vibeic fork: measurement bookkeeping, see GcVisibilityStats.
   void reportGcVisibility() const;
   void reportMarkerWriteback(int num_workers) const;
   // maxSpacing fix

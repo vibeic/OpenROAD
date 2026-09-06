@@ -3,7 +3,7 @@ or_integration_tests(
   TESTS
     down_access_term
     drc_test
-    gc_sees_routed
+    report_unowned_gc_objects
     ispd18_sample
     ispd18_sample_incr
     ndr_vias1

@@ -78,9 +78,9 @@ struct ParamStruct
   bool saveGuideUpdates = false;
   std::string repairPDNLayerName;
   int num_threads = 1;
-  // vibeic fork: -gc_sees_routed. Declared LAST so the positional brace
-  // initialisation in TritonRoute.i keeps its existing order.
-  bool gcSeesRouted = false;
+  // vibeic fork: -report_unowned_gc_objects. Declared LAST so the positional
+  // brace initialisation in TritonRoute.i keeps its existing order.
+  bool reportUnownedGcObjects = false;
 };
 
 class TritonRoute : public PinAccessService

@@ -656,9 +656,6 @@ void printIterationProgress(utl::Logger* logger,
 }
 }  // namespace
 
-// vibeic fork: say what -gc_sees_routed actually did. Emitted ONLY when the
-// flag is on, so with it off not one byte of the log moves. Reported even at
-// VERBOSE 0: a run that opts into an experiment is entitled to its result.
 // vibeic fork: MEASUREMENT ONLY, debug-gated. What the LAST iteration's workers
 // saw and then did not write back, because endAddMarkers keeps only what
 // intersects drcBox (routeBox + DRCSAFEDIST) while the GC checked extBox
@@ -680,17 +677,20 @@ void FlexDR::reportMarkerWriteback(int num_workers) const
                  getDesign()->getTopBlock()->getNumMarkers());
 }
 
+// vibeic fork: report what -report_unowned_gc_objects counted. Emitted ONLY
+// when the switch is on, so with it off not one byte of the log moves, and
+// even at VERBOSE 0: a run that asks for a measurement is entitled to it.
 void FlexDR::reportGcVisibility() const
 {
-  if (!router_cfg_->GC_SEES_ROUTED) {
+  if (!router_cfg_->REPORT_UNOWNED_GC_OBJECTS) {
     return;
   }
   logger_->info(
       DRT,
       708,
-      "gc_sees_routed: {} in-loop GC worker init(s); {} of them loaded "
-      "already-routed metal they do not own; {} object(s) total, worst single "
-      "init {}.",
+      "unowned_gc_objects: {} in-loop GC worker init(s); {} of them had "
+      "already-routed metal in extBox on nets they do not own; {} object(s) "
+      "total, worst single init {}.",
       gc_visibility_.in_loop_inits.load(),
       gc_visibility_.inits_with_unowned.load(),
       gc_visibility_.unowned_objs.load(),
