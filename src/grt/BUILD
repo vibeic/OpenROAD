@@ -171,6 +171,8 @@ cc_library(
         "src/Pin.cpp",
         "src/RepairAntennas.cpp",
         "src/RepairAntennas.h",
+        "src/RoutedStateSnapshot.cpp",
+        "src/RoutedStateSnapshot.h",
         "src/RoutingTracks.h",
         "src/Rudy.cpp",
     ],

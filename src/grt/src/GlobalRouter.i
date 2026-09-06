@@ -48,6 +48,26 @@ have_detailed_routes()
   return getGlobalRouter()->haveDetailedRoutes();
 }
 
+// Routed-state snapshot for the `repair_antennas -reroute` loop. One slot;
+// taking replaces. See GlobalRouter::takeRoutedStateSnapshot().
+void
+routed_state_take()
+{
+  getGlobalRouter()->takeRoutedStateSnapshot();
+}
+
+bool
+routed_state_restore()
+{
+  return getGlobalRouter()->restoreRoutedStateSnapshot();
+}
+
+void
+routed_state_discard()
+{
+  getGlobalRouter()->discardRoutedStateSnapshot();
+}
+
 void
 set_capacity_adjustment(float adjustment)
 {

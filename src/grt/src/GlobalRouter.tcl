@@ -290,6 +290,19 @@ sta::define_cmd_args "repair_antennas" { diode_cell \
                                          [-allow_congestion] \
                                          [-reroute]}
 
+# The violating-net SET behind check_antennas' count, as a Tcl list.
+# `ant::antenna_violating_nets` joins with newline precisely because net
+# names here routinely contain [ ] (bus bits), which no space-joined string
+# survives. Runs the check; the ANT-0002/ANT-0001 lines are its own report.
+proc grt::antenna_violating_nets { } {
+  check_antennas
+  set names [ant::antenna_violating_nets]
+  if { $names eq "" } {
+    return {}
+  }
+  return [split $names "\n"]
+}
+
 proc repair_antennas { args } {
   sta::parse_key_args "repair_antennas" args \
     keys {-iterations -ratio_margin} flags {-jumper_only -diode_only -allow_congestion -reroute}
@@ -371,17 +384,94 @@ proc repair_antennas { args } {
       if { [info exists keys(-iterations)] } {
         set reroute_cap $iterations
       }
-      for { set pass 0 } { $pass < $reroute_cap } { incr pass } {
-        if { [check_antennas] == 0 } {
+      # BEST-STATE RETENTION (vibeic fork). This loop can walk PAST its best
+      # state: one repair+reroute pass re-introduces violations a previous
+      # pass cleared, and the loop used to return -- and leave the design in
+      # -- whatever the LAST pass produced. Measured on a 15,690-instance
+      # design: it entered with 2 violating nets, measured 2 on four of its
+      # states, and shipped 3.
+      #
+      # So: measure the violating-net SET before every pass, keep a
+      # restorable snapshot of the best state seen, and if the state we end
+      # on is not that one, put the design back. A count alone cannot decide
+      # this -- "2 nets" before and "2 nets" after can be two different pairs
+      # of nets -- so the comparison is by membership and the report names
+      # the nets.
+      grt::routed_state_discard
+      set states {}
+      set best_pass -1
+      set best_nets {}
+      set best_count -1
+      set churn {}
+      for { set pass 0 } { $pass <= $reroute_cap } { incr pass } {
+        set nets [grt::antenna_violating_nets]
+        set count [llength $nets]
+        lappend states $count
+        if { $best_pass < 0 || $count < $best_count } {
+          set best_pass $pass
+          set best_nets $nets
+          set best_count $count
+          if { $pass < $reroute_cap && $count > 0 } {
+            grt::routed_state_take
+          }
+        } elseif { $count == $best_count && $nets ne $best_nets } {
+          # Same number, different nets. A count-only loop calls this "no
+          # progress"; it is the loop trading one violation for another.
+          # The earlier state is kept (fewer diodes, less churn) and the
+          # exchange is reported rather than averaged away.
+          lappend churn "state $pass"
+        }
+        if { $count == 0 } {
           utl::info GRT 313 "repair_antennas -reroute: antenna-clean after\
             $pass reroute pass(es)."
+          grt::routed_state_discard
           return 0
+        }
+        if { $pass == $reroute_cap } {
+          break
         }
         grt::repair_antennas $diode_mterm 1 $ratio_margin $jumper_only \
           $diode_only
         detailed_route -verbose 0
       }
-      return [check_antennas]
+      set final_count [lindex $states end]
+      set final_nets $nets
+      utl::info GRT 318 "repair_antennas -reroute: violating nets by state:\
+        [join $states { }] (state 0 is before the first pass); best is state\
+        $best_pass with $best_count."
+      if { [llength $churn] > 0 } {
+        utl::info GRT 319 "repair_antennas -reroute: the count was unchanged\
+          but the violating SET changed at [join $churn {, }] -- the loop\
+          exchanged violations rather than removing them."
+      }
+      if { $final_count > $best_count } {
+        # Only a strict regression is undone. An equal-count final state is
+        # left alone: rolling that back would discard real work to buy
+        # nothing measurable.
+        utl::warn GRT 320 "repair_antennas -reroute: the final state has\
+          $final_count violating net(s), worse than state $best_pass with\
+          $best_count. Restoring the best state."
+        if { [grt::routed_state_restore] } {
+          set verify [grt::antenna_violating_nets]
+          if { [llength $verify] != $best_count } {
+            utl::error GRT 323 "repair_antennas -reroute: restore\
+              verification failed -- expected $best_count violating net(s)\
+              after restoring state $best_pass, measured [llength $verify].\
+              The design is in a state no pass produced."
+          }
+          set final_count $best_count
+          set final_nets $best_nets
+        } else {
+          utl::warn GRT 322 "repair_antennas -reroute: the best state could\
+            not be restored; the design is left as the last pass produced it\
+            with $final_count violating net(s)."
+        }
+      }
+      grt::routed_state_discard
+      utl::warn GRT 321 "repair_antennas -reroute: NOT CONVERGED after\
+        $reroute_cap pass(es). $final_count net(s) still violate:\
+        [join $final_nets { }]."
+      return $final_count
     }
     return [grt::repair_antennas $diode_mterm $iterations $ratio_margin $jumper_only $diode_only]
   } else {

@@ -61,6 +61,7 @@ namespace grt {
 class FastRouteCore;
 class CUGR;
 class RepairAntennas;
+class RoutedStateSnapshot;
 class Grid;
 class Pin;
 class Net;
@@ -239,6 +240,16 @@ class GlobalRouter
                      bool jumper_only,
                      bool diode_only,
                      int num_threads = 1);
+  // Routed-state snapshot for the antenna repair->reroute loop, which can
+  // walk PAST its best state: one repair+reroute pass can re-introduce
+  // violations the previous pass cleared. There is exactly one slot; taking
+  // a snapshot replaces whatever was there.
+  void takeRoutedStateSnapshot();
+  bool hasRoutedStateSnapshot() const;
+  // false (and the design untouched) if the snapshot no longer describes
+  // the block; see RoutedStateSnapshot::restore().
+  bool restoreRoutedStateSnapshot();
+  void discardRoutedStateSnapshot();
   void updateResources(const int& init_x,
                        const int& init_y,
                        const int& final_x,
@@ -605,6 +616,7 @@ class GlobalRouter
   int macro_extension_;
   bool initialized_;
   int total_diodes_count_;
+  std::unique_ptr<RoutedStateSnapshot> routed_state_snapshot_;
   bool is_congested_{false};
   bool incremental_congestion_report_pending_{false};
   // Block property recording which engine produced the persisted guides.

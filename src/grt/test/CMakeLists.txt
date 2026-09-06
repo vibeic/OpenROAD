@@ -106,6 +106,7 @@ or_integration_tests(
     repair_antennas_post_drt_below_min_cugr
     repair_antennas_post_drt_cugr
     repair_antennas_reroute
+    repair_antennas_best_state
     report_wire_length1
     report_wire_length2
     report_wire_length3
