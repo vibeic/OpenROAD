@@ -1329,6 +1329,12 @@ void lefinReader::macroBegin(const char* name)
 
     if (master_ == nullptr) {
       master_ = dbMaster::create(lib_, name);
+    } else if (master_->isFrozen()) {
+      logger_->warn(utl::ODB,
+                    406,
+                    "duplicate MACRO ({}) ignoring...",
+                    master_->getName());
+      master_ = nullptr;
     }
   }
 
