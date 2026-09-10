@@ -242,7 +242,10 @@ py_test(
     name = "grt_man_tcl_check",
     srcs = ["grt_man_tcl_check.py"],
     data = ["//src/grt:doc_files"],
-    tags = ["doc_check"],
+    tags = [
+        "doc_check",
+        "py",
+    ],
     deps = ["//docs/src/scripts:extract_utils"],
 )
 
