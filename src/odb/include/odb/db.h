@@ -7552,6 +7552,8 @@ class dbChipNet : public dbObject
 
   dbSet<dbChipCapNode> getChipCapNodes() const;
 
+  float getTotalCapacitance() const;
+
   dbSet<dbChipRSeg> getChipRSegs() const;
 
   uint32_t getNumBumpInsts() const;
