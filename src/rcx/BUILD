@@ -75,6 +75,7 @@ cc_library(
         "src/parse.cpp",
         "src/parse.h",
         "src/process_ext.cpp",
+        "src/routingPreserver.cpp",
     ],
     hdrs = [
         "include/rcx/array1.h",
@@ -99,6 +100,7 @@ cc_library(
         "include/rcx/multiChipExtractor.h",
         "include/rcx/multiChipSpefWriter.h",
         "include/rcx/rcx.h",
+        "include/rcx/routingPreserver.h",
         "include/rcx/util.h",
     ],
     includes = [

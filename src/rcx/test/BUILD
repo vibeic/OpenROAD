@@ -130,6 +130,7 @@ cc_test(
     name = "rcx_unittest",
     srcs = [
         "TestExtractor.cpp",
+        "TestRoutingPreserver.cpp",
         "ext2dBoxTest.cpp",
     ],
     deps = [

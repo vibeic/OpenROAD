@@ -10,6 +10,7 @@
 
 #include "odb/db.h"
 #include "odb/wOrder.h"
+#include "rcx/routingPreserver.h"
 
 namespace rcx {
 
@@ -22,8 +23,21 @@ void MultiChipExtractor::run(const ExtractOptions& options)
 {
   loadRules();
 
+  // vibeic fork: same defect, second door. odb::orderWires() rewrites every
+  // non-supply net's dbWire non-geometry-preservingly, and this path calls it
+  // once per DIE. It is not an obscure entry point: `extract_parasitics`
+  // dispatches HERE, not to Ext::extract(), whenever the top chip is HIER, so a
+  // hierarchical design got the corruption through the same user-facing command
+  // while the single-chip path was already protected (vibeic/OpenROAD#23).
+  //
+  // ONE preserver for every die: the restore must not happen inside the loop,
+  // because extractInterChipParasitics() below reads the ordered wires of all of
+  // them. The destructor runs when run() returns, by any path.
+  RoutingPreserver routing_preserver(logger_);
+
   for (odb::dbChip* chip : db_->getChips()) {
     if (chip->getChipType() == odb::dbChip::ChipType::DIE) {
+      routing_preserver.snapshot(chip->getBlock());
       odb::orderWires(logger_, chip->getBlock());
       extractChipParasitics(chip, options);
     }
