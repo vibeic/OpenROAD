@@ -90,6 +90,7 @@ antenna_violations_present 1
 [INFO DRT-0036] met5 guide region query size = 0.
 [INFO DRT-0179] Init gr pin query.
 [INFO DRT-0634] Scoped detailed routing touched 9 net(s) in the database and left 402 net(s) byte-identical. Named: clk, req_msg[11], req_msg[14], req_msg[15], req_msg[23], req_msg[25], req_msg[28], req_msg[31], ... (1 more).
+[INFO DRT-0711] Scoped detailed routing: whole-design violations 0 on entry, 0 on exit (delta +0).
 [INFO ANT-0002] Found 0 net violations.
 [INFO ANT-0001] Found 0 pin violations.
 [INFO GRT-0313] repair_antennas -reroute: antenna-clean after 1 reroute pass(es).

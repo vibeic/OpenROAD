@@ -90,6 +90,7 @@ SCOPED_BYSTANDER_BEFORE: NOWIRE
 [INFO DRT-0036] Metal9 guide region query size = 0.
 [INFO DRT-0179] Init gr pin query.
 [INFO DRT-0634] Scoped detailed routing touched 1 net(s) in the database and left 9 net(s) byte-identical. Named: net1231.
+[INFO DRT-0711] Scoped detailed routing: whole-design violations 0 on entry, 0 on exit (delta +0).
 SCOPED_NETS_TOTAL: 11
 SCOPED_TARGET_REWIRED: 1
 SCOPED_BYSTANDER_REWIRED: 0

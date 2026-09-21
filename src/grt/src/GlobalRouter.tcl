@@ -288,7 +288,8 @@ sta::define_cmd_args "repair_antennas" { diode_cell \
                                          [-jumper_only] \
                                          [-diode_only] \
                                          [-allow_congestion] \
-                                         [-reroute]}
+                                         [-reroute] \
+                                         [-output_drc filename]}
 
 # The violating-net SET behind check_antennas' count, as a Tcl list.
 # `ant::antenna_violating_nets` joins with newline precisely because net
@@ -315,7 +316,8 @@ proc grt::repaired_net_names { } {
 
 proc repair_antennas { args } {
   sta::parse_key_args "repair_antennas" args \
-    keys {-iterations -ratio_margin} flags {-jumper_only -diode_only -allow_congestion -reroute}
+    keys {-iterations -ratio_margin -output_drc} \
+    flags {-jumper_only -diode_only -allow_congestion -reroute}
   if { [ord::get_db_block] == "NULL" } {
     utl::error GRT 104 "No design block found."
   }
@@ -360,6 +362,16 @@ proc repair_antennas { args } {
 
     set jumper_only [info exists flags(-jumper_only)]
     set diode_only [info exists flags(-diode_only)]
+    # Only -reroute runs a detailed route, so only -reroute can honour this.
+    set output_drc ""
+    if { [info exists keys(-output_drc)] } {
+      set output_drc $keys(-output_drc)
+      if { ![info exists flags(-reroute)] } {
+        utl::warn GRT 326 "repair_antennas -output_drc is only used by\
+          -reroute, which is the flag that runs a detailed route. Ignoring it."
+        set output_drc ""
+      }
+    }
 
     if { $jumper_only && $diode_only } {
       utl::error GRT 294 "Only use either -jumper_only or -diode_only flag"
@@ -462,7 +474,20 @@ proc repair_antennas { args } {
           utl::info GRT 325 "repair_antennas -reroute: re-routing [llength\
             $scope] net(s) the repair pass left unwired; every other net is\
             held fixed."
-          detailed_route -verbose 0 -nets $scope
+          # -output_drc reaches the SCOPED route (vibeic fork). TritonRoute's
+          # setParams() re-reads DRC_RPT_FILE from every detailed_route
+          # invocation's own option, so an -output_drc given to the route that
+          # laid the design does not carry into this one: without passing it
+          # here, the reroute's residual can never be named. Measured on a
+          # production antenna repair: the scoped route left 599 whole-design
+          # violations and not one of them had a layer, net or location
+          # anywhere, because the only -output_drc in the run had been given to
+          # the base route (which had none to report).
+          if { $output_drc ne "" } {
+            detailed_route -verbose 0 -nets $scope -output_drc $output_drc
+          } else {
+            detailed_route -verbose 0 -nets $scope
+          }
         }
       }
       set final_count [lindex $states end]

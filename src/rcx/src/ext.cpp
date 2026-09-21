@@ -8,6 +8,8 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "odb/db.h"
 #include "odb/dbObject.h"
@@ -249,10 +251,152 @@ void Ext::setAssemblyExtractionRulesFile(
       assembly_extraction_rules_file);
 }
 
+namespace {
+
+// vibeic fork: EXTRACTION MUST NOT CHANGE THE ROUTING IT MEASURES.
+//
+// Ext::extract() begins with odb::orderWires(), which walks every non-supply
+// net through tmg_conn::analyzeNet() and REWRITES its dbWire into an ordered,
+// chained path. The RC tree walk needs that ordering. The caller's routing
+// does not survive it.
+//
+// MEASURED on a detail-routed gf180mcuD design (655 signal nets), with nothing
+// else in the session -- read_db, define_process_corner, extract_parasitics,
+// write_db:
+//
+//     whole-design DRC before extract_parasitics ...... 0 violation(s)
+//     whole-design DRC after  extract_parasitics ...... 599 violation(s)
+//                                                       (547 Short,
+//                                                        45 Metal Spacing,
+//                                                        7 NS Metal)
+//     dbWire entry count ............................. 32,634 -> 17,824
+//
+// The same 599 are reported by two independent builds of the checker, survive
+// a write_db/read_db round trip, and are absent from the database one step
+// earlier -- they are real geometry, created by the re-encode. Downstream this
+// is silent: the flow that extracted parasitics to do post-route timing repair
+// went on to ship the corrupted route, and the first thing to notice was a
+// gate 450 log lines later holding a bare violation count with no layer, net
+// or location. The scoped detailed route that ran in between was blamed for
+// them; it had created none (its own entry/exit delta is +0).
+//
+// So the wire stream of every net is saved before the ordering and replayed
+// afterwards through dbWire::addOneSeg -- odb's own documented way to "save
+// and restore routing without re-encoding it". The parasitics are untouched:
+// write_spef produces a byte-identical SPEF either side of the restore (only
+// its *DATE line differs). The isWireOrdered flag is restored too, so a later
+// consumer that needs ordered wires still orders them for itself.
+//
+// This does NOT fix tmg_conn's re-encode, which is the underlying defect and
+// is not this function's to repair. It stops that defect from reaching the
+// caller's database.
+class RoutingPreserver
+{
+ public:
+  RoutingPreserver(utl::Logger* logger, odb::dbBlock* block)
+      : logger_(logger), block_(block)
+  {
+    if (block_ == nullptr) {
+      return;
+    }
+    for (odb::dbNet* net : block_->getNets()) {
+      if (net->getSigType().isSupply() || net->isSpecial()) {
+        continue;  // orderWires skips these, so there is nothing to preserve
+      }
+      odb::dbWire* wire = net->getWire();
+      if (wire == nullptr) {
+        continue;
+      }
+      Saved saved;
+      saved.net = net;
+      saved.ordered = net->isWireOrdered();
+      const uint32_t n = wire->length();
+      saved.stream.reserve(n);
+      for (uint32_t i = 0; i < n; i++) {
+        saved.stream.emplace_back(wire->getOpcode(i), wire->getData(i));
+      }
+      saved_.push_back(std::move(saved));
+    }
+  }
+
+  // Restores on EVERY exit from extract(), including the early returns and an
+  // exception: a half-extracted design must not be left with rewritten wires
+  // either.
+  ~RoutingPreserver()
+  {
+    int restored = 0;
+    for (const Saved& saved : saved_) {
+      odb::dbWire* wire = saved.net->getWire();
+      if (wire != nullptr && sameStream(wire, saved.stream)) {
+        continue;  // ordering left this one alone; do not touch it
+      }
+      if (wire != nullptr) {
+        odb::dbWire::destroy(wire);
+      }
+      wire = odb::dbWire::create(saved.net);
+      if (wire == nullptr) {
+        continue;
+      }
+      for (const auto& [op, value] : saved.stream) {
+        wire->addOneSeg(op, value);
+      }
+      saved.net->setWireOrdered(saved.ordered);
+      restored++;
+    }
+    if (restored > 0) {
+      // Reported, not silent: the number IS the size of the defect this is
+      // working around, and a run where it suddenly goes to 0 means tmg_conn
+      // was fixed and this can go.
+      logger_->info(RCX,
+                    700,
+                    "Restored the routing of {} of {} net(s) that wire "
+                    "ordering rewrote. Extraction does not change the route "
+                    "it measures; the parasitics are unaffected.",
+                    restored,
+                    saved_.size());
+    }
+  }
+
+  RoutingPreserver(const RoutingPreserver&) = delete;
+  RoutingPreserver& operator=(const RoutingPreserver&) = delete;
+
+ private:
+  struct Saved
+  {
+    odb::dbNet* net{nullptr};
+    bool ordered{false};
+    std::vector<std::pair<unsigned char, int>> stream;
+  };
+
+  static bool sameStream(odb::dbWire* wire,
+                         const std::vector<std::pair<unsigned char, int>>& s)
+  {
+    if (wire->length() != s.size()) {
+      return false;
+    }
+    for (uint32_t i = 0; i < wire->length(); i++) {
+      if (wire->getOpcode(i) != s[i].first || wire->getData(i) != s[i].second) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  utl::Logger* logger_{nullptr};
+  odb::dbBlock* block_{nullptr};
+  std::vector<Saved> saved_;
+};
+
+}  // namespace
+
 void Ext::extract(ExtractOptions options)
 {
   _ext->setBlockFromChip(_db->getChip());
   odb::dbBlock* block = _ext->getBlock();
+
+  // vibeic fork: see RoutingPreserver. Constructed BEFORE orderWires() and
+  // destroyed when extract() returns, by any path.
+  RoutingPreserver routing_preserver(logger_, block);
 
   odb::orderWires(logger_, block);
 

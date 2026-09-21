@@ -15,5 +15,6 @@
 [INFO RCX-0442] 50% of 2368 wires extracted
 [INFO RCX-0442] 100% of 2368 wires extracted
 [INFO RCX-0045] Extract 411 nets, 5202 rsegs, 5202 caps, 2237 ccs
+[INFO RCX-0700] Restored the routing of 411 of 411 net(s) that wire ordering rewrote. Extraction does not change the route it measures; the parasitics are unaffected.
 [INFO RCX-0443] 411 nets finished
 No differences found.

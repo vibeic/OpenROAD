@@ -2018,6 +2018,212 @@ void TritonRoute::reportPreRepairDrc()
                  (int) markers.size());
 }
 
+// vibeic fork: a digest of a net's dbWire EXACTLY as odb holds it.
+//
+// length()/getOpcode()/getData() are odb's own raw accessors -- the same
+// stream dbWire::addOneSeg() replays to reproduce a wire verbatim -- so a
+// digest over them is a digest over the bytes, not over a re-rendering of
+// them. A net with no wire digests to 0, which is distinct from every wire
+// odb can hold because every wire has at least one entry.
+uint64_t TritonRoute::wireDigest(odb::dbNet* net)
+{
+  if (net == nullptr) {
+    return 0;
+  }
+  odb::dbWire* wire = net->getWire();
+  if (wire == nullptr) {
+    return 0;
+  }
+  const uint32_t n = wire->length();
+  uint64_t h = 1469598103934665603ULL;  // FNV-1a offset basis
+  auto mix = [&h](uint64_t v) {
+    for (int b = 0; b < 8; b++) {
+      h ^= (v >> (b * 8)) & 0xFF;
+      h *= 1099511628211ULL;
+    }
+  };
+  mix(n);
+  for (uint32_t i = 0; i < n; i++) {
+    mix(static_cast<uint64_t>(wire->getOpcode(i)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(wire->getData(i))));
+  }
+  return h;
+}
+
+// vibeic fork: record what the held nets' wires ARE, so the claim that they
+// were not touched can be contradicted by the database.
+//
+// DRT-0634 used to quote io::Writer::getNetsWireHeldFixed(), which is the
+// writer's count of the nets it decided to skip. That number is produced by
+// the same code whose behaviour it describes, so it could not be wrong -- and
+// a check that cannot fail is not a check. Measured on a production run: the
+// scoped route reported "654 net(s) byte-identical" while every one of the
+// design's 655 signal nets came out of it re-encoded (dbWire entry count
+// 32,634 -> 17,857) and the whole-design DRC went from 0 to 599 violations.
+// Nothing in the router said so.
+void TritonRoute::snapshotScopeHeldWires()
+{
+  scope_held_wire_digest_.clear();
+  if (route_nets_scope_.empty() || db_ == nullptr || db_->getChip() == nullptr) {
+    return;
+  }
+  odb::dbBlock* block = db_->getChip()->getBlock();
+  if (block == nullptr) {
+    return;
+  }
+  frBlock* fr_block = getDesign()->getTopBlock();
+  for (auto* net : block->getNets()) {
+    frNet* fr_net = fr_block->findNet(net->getName());
+    if (fr_net == nullptr || !fr_net->isScopeHeld()) {
+      continue;
+    }
+    scope_held_wire_digest_[net->getName()] = wireDigest(net);
+  }
+}
+
+std::vector<std::string> TritonRoute::scopeHeldWiresChanged() const
+{
+  std::vector<std::string> changed;
+  if (scope_held_wire_digest_.empty() || db_ == nullptr
+      || db_->getChip() == nullptr) {
+    return changed;
+  }
+  odb::dbBlock* block = db_->getChip()->getBlock();
+  if (block == nullptr) {
+    return changed;
+  }
+  for (const auto& [name, digest] : scope_held_wire_digest_) {
+    odb::dbNet* net = block->findNet(name.c_str());
+    // A held net that no longer exists is a change of the worst kind.
+    if (net == nullptr || wireDigest(net) != digest) {
+      changed.push_back(name);
+    }
+  }
+  return changed;
+}
+
+// vibeic fork: the whole-design violation count, with the engine verifyRoute()
+// uses, so an entry measurement and an exit measurement cover the SAME
+// population. -1 means it could not be taken; that is NOT_MEASURED and the
+// caller must not read it as zero.
+int TritonRoute::wholeDesignDrcCount()
+{
+  frDesign* design = getDesign();
+  if (design == nullptr) {
+    return -1;
+  }
+  frBlock* block = design->getTopBlock();
+  frRegionQuery* rq = design->getRegionQuery();
+  if (block == nullptr || rq == nullptr
+      || block->getGCellPatterns().size() < 2) {
+    return -1;
+  }
+  rq->initDRObj();
+  frList<std::unique_ptr<frMarker>> markers;
+  getDRCMarkers(markers, block->getBBox());
+  return static_cast<int>(markers.size());
+}
+
+// vibeic fork: THE SCOPED ROUTE'S OWN VERDICT.
+//
+// `detailed_route -nets` promises two things and used to check neither against
+// the database:
+//
+//   (1) the nets it was not given come out byte-identical, and
+//   (2) the design it hands back is the design it was asked to change.
+//
+// (1) was reported from io::Writer's own bookkeeping (DRT-0634) and (2) was
+// not reported at all: verifyRoute() emitted DRT-0701 "N violation(s) that the
+// routing loop did not report (M in-loop)" and RETURNED SUCCESS. Measured on a
+// production antenna repair: one net named, DRT-0634 "654 net(s)
+// byte-identical", DRT-0701 "599 violation(s) ... (0 in-loop)", DRT-0703
+// "handed 7 junction(s); widened 0; left 7 unresolved" -- and exit 0. The
+// design went from whole-design DRC 0 to 599 (547 Short, 45 Metal Spacing,
+// 7 NS Metal, confirmed on the written database by two independent builds of
+// the checker) and nothing in the flow learned of it for another 450 log lines,
+// where a downstream step read the stale count off detailed_route_num_drvs and
+// refused with a bare number and no layer, net or location.
+//
+// So: say what this invocation did to the whole-design count, against an entry
+// measurement of the same population; say whether the held nets really are
+// byte-identical; and refuse -- by name -- rather than return success on a
+// design this route made worse.
+void TritonRoute::reportScopedRouteOutcome(int verified)
+{
+  // (1) The byte-identical claim, measured on odb.
+  const std::vector<std::string> changed = scopeHeldWiresChanged();
+  if (!changed.empty()) {
+    std::string named;
+    const int cap = 8;
+    for (int i = 0; i < (int) changed.size() && i < cap; i++) {
+      named += (i ? ", " : "") + changed[i];
+    }
+    if ((int) changed.size() > cap) {
+      named += fmt::format(", ... ({} more)", changed.size() - cap);
+    }
+    logger_->error(DRT,
+                   709,
+                   "detailed_route -nets: {} of {} net(s) held outside the "
+                   "scope came out with a DIFFERENT dbWire. A scoped route "
+                   "that rewrites a net it was told to preserve has not done "
+                   "what it reported. Changed: {}.",
+                   changed.size(),
+                   scope_held_wire_digest_.size(),
+                   named);
+  }
+
+  // (2) The whole-design count, entry vs exit, same engine, same population.
+  if (scope_entry_drc_ < 0) {
+    // NOT_MEASURED. Never defaulted to 0: without an entry count the exit
+    // count is not attributable, and saying so is the honest report.
+    if (verified > 0) {
+      logger_->warn(DRT,
+                    710,
+                    "detailed_route -nets finished with {} whole-design "
+                    "violation(s), but the entry count could not be taken "
+                    "(no gcell grid), so NONE of them is attributable to this "
+                    "route. NOT_MEASURED, not zero.",
+                    verified);
+    }
+    return;
+  }
+  const int delta = verified - scope_entry_drc_;
+  logger_->info(DRT,
+                711,
+                "Scoped detailed routing: whole-design violations {} on entry, "
+                "{} on exit (delta {:+d}).",
+                scope_entry_drc_,
+                verified,
+                delta);
+  if (delta <= 0) {
+    return;
+  }
+  // The residual is this route's own. Name it if it can be named, and say so
+  // plainly if it cannot -- an unnameable violation is the reason a downstream
+  // consumer is left holding a bare count.
+  std::string where;
+  if (!router_cfg_->DRC_RPT_FILE.empty()) {
+    where = fmt::format(
+        " Every violation is named (layer, rule, net, bbox) in {}.",
+        router_cfg_->DRC_RPT_FILE);
+  } else {
+    where =
+        " No violation can be named: this invocation was given no -output_drc,"
+        " so no layer, net or location was written anywhere. Re-run it with"
+        " -output_drc <file>.";
+  }
+  logger_->error(DRT,
+                 712,
+                 "detailed_route -nets ADDED {} whole-design DRC violation(s) "
+                 "({} on entry, {} on exit). A scoped route exists to change "
+                 "the named nets and nothing else; a design it made worse is "
+                 "not a result it may return successfully.{}",
+                 delta,
+                 scope_entry_drc_,
+                 verified,
+                 where);
+}
+
 int TritonRoute::verifyRoute()
 {
   frDesign* design = getDesign();
@@ -2231,6 +2437,26 @@ int TritonRoute::main()
                     name);
     }
   }
+  // vibeic fork: a SCOPED route must be able to ATTRIBUTE its residual.
+  //
+  // The guides exist from here on, so the gcell grid exists and the
+  // whole-design checker can run. Taking the count HERE and again in
+  // verifyRoute() gives two numbers over the same population with the same
+  // engine, and their difference is this invocation's own doing. The number
+  // DRT-0701 used to hold up beside the verified count was the ripup loop's
+  // tile-local residual -- a different population -- so "599 out-of-loop
+  // against 0 in-loop" said nothing about who made the 599.
+  //
+  // Only for a scoped route: a whole-design route pays this pass for nothing,
+  // because it rips the design up and every violation in the result is its own
+  // by construction.
+  if (!route_nets_scope_.empty()) {
+    scope_entry_drc_ = wholeDesignDrcCount();
+    snapshotScopeHeldWires();
+  } else {
+    scope_entry_drc_ = -1;
+    scope_held_wire_digest_.clear();
+  }
   prep();
   ta();
   if (distributed_) {
@@ -2255,8 +2481,15 @@ int TritonRoute::main()
     // residual -- measured to disagree with a whole-design pass of the same GC
     // engine on the same DEF -- and it was written before the min-area repair
     // above had even added its patches.
-    verifyRoute();
+    const int verified = verifyRoute();
     endFR();
+    // vibeic fork: the two claims a scoped route makes about the database it
+    // did not route, MEASURED -- after endFR() so the evidence (the written
+    // database and, when -output_drc was given, the named residual) is on disk
+    // before anything refuses, and so the refusal describes what was published.
+    if (!route_nets_scope_.empty()) {
+      reportScopedRouteOutcome(verified);
+    }
   }
   // The scope belongs to this command, not to the design. endFR() has already
   // written the database, so nothing downstream needs the marks.

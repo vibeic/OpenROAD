@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <list>
+#include <map>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -233,6 +234,38 @@ class TritonRoute : public PinAccessService
   // and by the test entry point so both report the same way and the warning is
   // reachable from a regression test.
   void reportNsMetalRepairOutcome(int ns_metal_after);
+
+  // vibeic fork: a SCOPED route (detailed_route -nets) makes two claims about
+  // the database it did not route. Both used to be reported from the router's
+  // own bookkeeping, which is the one source that cannot contradict it.
+  //
+  //   (a) "left N net(s) byte-identical" (DRT-0634) was io::Writer's count of
+  //       the nets it DECIDED to hold. Measured on a production run whose
+  //       scoped route reported 654 held: all 655 signal nets came out of it
+  //       re-encoded, and the design went from 0 to 599 whole-design DRC
+  //       violations. The claim is now measured on odb -- a digest of every
+  //       held net's raw dbWire entries taken when the scope is applied and
+  //       recomputed after the write -- so it can be false.
+  //   (b) "post-route verification found N violation(s) that the routing loop
+  //       did not report (M in-loop)" (DRT-0701) compared a WHOLE-DESIGN count
+  //       with a TILE-LOCAL one: two populations, so the difference was not
+  //       attributable to anything. A scoped route now takes the whole-design
+  //       count with the same engine on the way IN as well, and reports and
+  //       refuses on the DELTA.
+  static uint64_t wireDigest(odb::dbNet* net);
+  // Digest every net applyNetRouteScope() marked held. Cleared and refilled on
+  // every route; empty when no scope is in force.
+  void snapshotScopeHeldWires();
+  // Names of held nets whose dbWire is NOT what it was when the scope was
+  // applied. Empty is the only result a byte-preserving route may produce.
+  std::vector<std::string> scopeHeldWiresChanged() const;
+  // Whole-design violation count with the same engine verifyRoute() uses.
+  // -1 when it cannot run (no gcell grid), which is NOT_MEASURED, not zero.
+  int wholeDesignDrcCount();
+  // Say what a SCOPED route did -- to the nets it was told to preserve and to
+  // the whole-design violation count -- and refuse rather than return success
+  // on a design it made worse. `verified` is verifyRoute()'s exit count.
+  void reportScopedRouteOutcome(int verified);
   // vibeic fork: run the post-route NS-Metal repair on an ALREADY ROUTED
   // design and re-verify, without re-entering detailed_route. This is the
   // only way patchNonSufficientMetalViolations can be regression-tested:
@@ -267,6 +300,12 @@ class TritonRoute : public PinAccessService
   void updateDirtyPAData();
 
  private:
+  // vibeic fork: see snapshotScopeHeldWires(). Keyed by odb net name.
+  std::map<std::string, uint64_t> scope_held_wire_digest_;
+  // vibeic fork: whole-design violation count taken on entry to a SCOPED
+  // route, so its residual can be attributed. -1 = NOT_MEASURED.
+  int scope_entry_drc_{-1};
+
   // vibeic fork: the -nets scope, verbatim as the caller named it. Empty when
   // the invocation routes the whole design.
   std::vector<std::string> route_nets_scope_;

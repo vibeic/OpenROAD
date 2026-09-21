@@ -4,6 +4,7 @@ or_integration_tests(
     45_gcd
     dup_pattern_names
     ext_pattern
+    extract_preserves_routing
     gcd
     generate_pattern
     names
