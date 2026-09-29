@@ -1,0 +1,51 @@
+[INFO ODB-0227] LEF file: Nangate45/Nangate45.lef, created 22 layers, 27 vias, 135 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0130]     Created 54 pins.
+[INFO ODB-0131]     Created 624 components and 2752 component-terminals.
+[INFO ODB-0132]     Created 2 special nets and 1248 connections.
+[INFO ODB-0133]     Created 581 nets and 1504 connections.
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0015] Reading location of sources from: Vsrc_gcd_vdd.loc.
+########## IR report #################
+Net              : VDD
+Corner           : default
+Total power      : 1.38e-04 W
+Supply voltage   : 1.10e+00 V
+Worstcase voltage: 1.10e+00 V
+Average voltage  : 1.10e+00 V
+Average IR drop  : 3.13e-04 V
+Worstcase IR drop: 5.04e-04 V
+Percentage drop  : 0.05 %
+######################################
+########## EM analysis ###############
+Net                : VDD
+Corner             : default
+Maximum current    : 8.10e-05 A
+Average current    : 1.20e-06 A
+Number of resistors: 2503
+######################################
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0115] Loaded 1 per-layer EM current-density limit(s) from gcd_em_no_silent_skip.limits.
+########## EM current-density signoff ##########
+Net                : VDD
+Corner             : default
+Segments checked   : 2503
+With J-limit       : 2243
+Vias judged per cut: 0
+No J-limit (skipped): 260
+  NO_LIMIT metal4      : 56
+  NO_LIMIT metal7      : 18
+  NO_LIMIT via1        : 58
+  NO_LIMIT via2        : 58
+  NO_LIMIT via3        : 58
+  NO_LIMIT via4        : 4
+  NO_LIMIT via5        : 4
+  NO_LIMIT via6        : 4
+No area (skipped)  : 0
+Worst J            : 2.749e-04 A/um^2 (layer metal1)
+Worst J-limit      : 1.000e+00 A/um^2
+Worst utilization  : 0.03 %
+Violations         : 0
+Verdict            : NOT_MEASURED
+###############################################
+EM no-silent-skip self-check: solved=2503 listed=2503 NO_LIMIT=via1 58 via2 58 via3 58 metal4 56 via4 4 via5 4 via6 4 metal7 18 OK

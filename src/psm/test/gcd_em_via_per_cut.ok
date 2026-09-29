@@ -1,0 +1,41 @@
+[INFO ODB-0227] LEF file: Nangate45/Nangate45.lef, created 22 layers, 27 vias, 135 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0130]     Created 54 pins.
+[INFO ODB-0131]     Created 624 components and 2752 component-terminals.
+[INFO ODB-0132]     Created 2 special nets and 1248 connections.
+[INFO ODB-0133]     Created 581 nets and 1504 connections.
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0115] Loaded 19 per-layer EM current-density limit(s) from gcd_em_via_per_cut.loose_limits.
+[INFO PSM-0015] Reading location of sources from: Vsrc_gcd_vdd.loc.
+########## EM current-density signoff ##########
+Net                : VDD
+Corner             : default
+Segments checked   : 2503
+With J-limit       : 2503
+Vias judged per cut: 186
+No J-limit (skipped): 0
+No area (skipped)  : 0
+Worst J            : 3.775e-04 A/um^2 (layer metal4)
+Worst J-limit      : 1.000e+00 A/um^2
+Worst utilization  : 0.04 %
+Violations         : 0
+Verdict            : PASS
+###############################################
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0115] Loaded 19 per-layer EM current-density limit(s) from gcd_em_via_per_cut.tight_limits.
+########## EM current-density signoff ##########
+Net                : VDD
+Corner             : default
+Segments checked   : 2503
+With J-limit       : 2503
+Vias judged per cut: 186
+No J-limit (skipped): 0
+No area (skipped)  : 0
+Worst J            : 6.749e-06 A/um^2 (layer via6)
+Worst J-limit      : 1.000e-09 A/um^2
+Worst utilization  : 674935.64 %
+Violations         : 186
+Verdict            : FAIL
+###############################################
+[WARNING PSM-0112] EM current-density signoff FAILED for net VDD: 186 segment(s) exceed the per-layer J-limit (worst 674935.6% of limit on via6).
+EM via per-cut self-check: vias=186 loose=0 tight=186 OK

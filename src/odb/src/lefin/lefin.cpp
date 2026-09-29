@@ -672,6 +672,27 @@ void lefinReader::layer(LefParser::lefiLayer* layer)
     return;
   }
 
+  // Keep the layer's DC current-density limit (single-value AVERAGE form)
+  // in the LEF's own units: mA/um of width for a ROUTING layer, mA/um^2 of
+  // cut area for a CUT layer (LEF/DEF reference, DCCURRENTDENSITY).  The
+  // table forms (WIDTH / CUTAREA ... TABLEENTRIES) are not kept.  The value
+  // is owned by the dbTech (keyed by layer name), not the layer, so that the
+  // LEF/DEF writers - which emit layer properties - output nothing new.
+  for (int d = 0; d < layer->numDccurrentDensity(); d++) {
+    LefParser::lefiLayerDensity* density = layer->dccurrent(d);
+    if (density != nullptr && density->type() != nullptr
+        && !strcmp(density->type(), "AVERAGE") && density->hasOneEntry()) {
+      const std::string name
+          = std::string("LEF_DCCURRENTDENSITY_AVERAGE:") + layer->name();
+      if (dbDoubleProperty* prop = dbDoubleProperty::find(tech_, name.c_str())) {
+        prop->setValue(density->oneEntry());
+      } else {
+        dbDoubleProperty::create(tech_, name.c_str(), density->oneEntry());
+      }
+      break;
+    }
+  }
+
   if (layer->hasPitch()) {
     l->setPitch(dbdist(layer->pitch()));
   } else if (layer->hasXYPitch()) {

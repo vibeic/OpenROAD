@@ -197,9 +197,20 @@ void LayerConnection::mergeWith(const Connection* other)
 
 /////////////////////////////
 
-ViaConnection::ViaConnection(Node* node0, Node* node1, int cuts)
-    : Connection(node0, node1), cuts_(cuts)
+ViaConnection::ViaConnection(Node* node0,
+                             Node* node1,
+                             int cuts,
+                             double cut_area_dbu2)
+    : Connection(node0, node1), cuts_(cuts), cut_area_dbu2_(cut_area_dbu2)
 {
+}
+
+odb::dbTechLayer* ViaConnection::getCutLayer() const
+{
+  if (node0_ == nullptr || node0_->getLayer() == nullptr) {
+    return nullptr;
+  }
+  return node0_->getLayer()->getUpperLayer();
 }
 
 Connection::Resistance ViaConnection::getResistance(
@@ -227,6 +238,7 @@ void ViaConnection::mergeWith(const Connection* other)
   }
 
   cuts_ += via_other->cuts_;
+  cut_area_dbu2_ += via_other->cut_area_dbu2_;
 }
 
 /////////////////////////////

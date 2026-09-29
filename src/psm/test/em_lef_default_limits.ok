@@ -1,0 +1,26 @@
+[INFO ODB-0227] LEF file: sky130hd/sky130hd.tlef, created 13 layers, 25 vias
+[INFO ODB-0227] LEF file: sky130hd/sky130hd_std_cell.lef, created 437 library cells
+[INFO ODB-0128] Design: gcd
+[INFO ODB-0130]     Created 54 pins.
+[INFO ODB-0131]     Created 538 components and 2577 component-terminals.
+[INFO ODB-0132]     Created 2 special nets and 1076 connections.
+[INFO ODB-0133]     Created 475 nets and 1498 connections.
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0118] No EM limit given: using 10 per-layer limit(s) from the tech LEF DCCURRENTDENSITY AVERAGE, per the LEF reference units (routing mA/um / THICKNESS, cut mA/um^2 of cut area).
+[INFO PSM-0073] Using bump pattern on met5 with x-pitch 140.0000um, y-pitch 140.0000um, and size 70.0000um with a reduction factor of 3x.
+########## EM current-density signoff ##########
+Net                : VDD
+Corner             : default
+Segments checked   : 1458
+With J-limit       : 516
+Vias judged per cut: 0
+No J-limit (skipped): 942
+  NO_LIMIT li1         : 942
+No area (skipped)  : 0
+Worst J            : 1.206e-04 A/um^2 (layer via)
+Worst J-limit      : 2.900e-04 A/um^2
+Worst utilization  : 41.59 %
+Violations         : 0
+Verdict            : NOT_MEASURED
+###############################################
+EM LEF-default self-check: judged per layer=met1 315 via 45 via2 45 via3 45 met4 42 via4 9 met5 15 OK

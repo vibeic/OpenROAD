@@ -5,7 +5,10 @@
 # exceeds the per-layer limit.  This test proves the FAIL->PASS transition on the
 # same design just by moving the limit:
 #   * a loose limit (1.0 A/um^2, far above the worst J) -> 0 violations, PASS;
-#   * a tight limit (0.002 A/um^2, below the worst J)   -> >0 violations, FAIL.
+#   * a tight limit (2e-4 A/um^2, below the worst J)    -> >0 violations, FAIL.
+# (The worst J is measured on the drawn metal: 3.8e-4 A/um^2 on metal4.  The
+# earlier 0.002 tight limit was only exceeded by metal1 segments judged on a
+# 0.005 um slice of the solver's shape decomposition, not on drawn metal.)
 # The counts are asserted in-Tcl, so the verdict is computed from real geometry
 # and real currents -- it cannot be faked by editing the golden log.
 source helpers.tcl
@@ -25,7 +28,7 @@ if { $pass_violations != 0 } {
 # FAIL case: limit below the worst current density -> real violations.
 set report_file [make_result_file gcd_em_density_vdd.rpt]
 set fail_violations [check_current_density -net VDD -vsrc Vsrc_gcd_vdd.loc \
-  -em_limit 0.002 -em_report $report_file]
+  -em_limit 2e-4 -em_report $report_file]
 if { $fail_violations <= 0 } {
   error "EM3 tight-limit case expected >0 violations, got $fail_violations"
 }

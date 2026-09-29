@@ -35,6 +35,12 @@ or_integration_tests(
     gcd_all_vss_source_res
     gcd_all_vss
     gcd_em_test_vdd
+    gcd_em_density_vdd
+    gcd_em_via_per_cut
+    gcd_em_no_silent_skip
+    gcd_em_drawn_width
+    em_lef_default_limits
+    gcd_signal_em
     gcd_gt2n_backside
     gcd_gt2n_backside_wo_pins
     gcd_gt2n_backside_wo_pins_straps

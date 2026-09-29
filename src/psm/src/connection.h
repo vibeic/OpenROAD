@@ -119,10 +119,19 @@ class LayerConnection : public Connection
 class ViaConnection : public Connection
 {
  public:
-  ViaConnection(Node* node0, Node* node1, int cuts);
+  // cut_area_dbu2: the drawn area of the via's cut shapes [DBU^2] (0 when
+  // unknown).  Each cut carries 1 / cuts of the connection current.
+  ViaConnection(Node* node0, Node* node1, int cuts, double cut_area_dbu2 = 0.0);
 
   Resistance getResistance(const ResistanceMap& res_map) const override;
+  // The cuts' total drawn area [DBU^2]; 0 when unknown.
+  double getCrossSectionAreaDBU2() const override { return cut_area_dbu2_; }
   bool isValid() const override;
+
+  int getCuts() const { return cuts_; }
+  // The cut layer this via crosses: the layer above its bottom routing layer
+  // (the same layer getResistance() takes the per-cut resistance from).
+  odb::dbTechLayer* getCutLayer() const;
 
   void mergeWith(const Connection* other) override;
 
@@ -132,6 +141,7 @@ class ViaConnection : public Connection
 
  private:
   int cuts_;
+  double cut_area_dbu2_;
 };
 
 class TermConnection : public Connection

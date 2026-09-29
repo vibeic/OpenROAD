@@ -128,6 +128,13 @@ class IRNetwork
     return interdie_connections_.size();
   }
 
+  // Width [DBU] of the narrowest drawn rectangle on `layer` that carries the
+  // segment p0-p1 (contains both ends; else its midpoint), measured across
+  // the segment's direction.  0 when no drawn rectangle covers it.
+  int getDrawnWidth(odb::dbTechLayer* layer,
+                    const odb::Point& p0,
+                    const odb::Point& p1) const;
+
   void clearVisitedNodes();
 
   const Connections& getConnections() const { return connections_; }
@@ -282,6 +289,11 @@ class IRNetwork
 
   LayerMap<std::vector<std::unique_ptr<Shape>>> shapes_;
   LayerMap<std::vector<std::unique_ptr<Node>>> nodes_;
+
+  // Every drawn routing-layer rectangle of the net (wires, via enclosures,
+  // pins), as drawn -- before the per-layer union is sliced into the solver's
+  // shapes.  EM current density judges a wire on this geometry.
+  mutable LayerMap<std::vector<odb::Rect>> drawn_rects_;
 
   Connections connections_;
 

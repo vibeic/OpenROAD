@@ -1,0 +1,21 @@
+# EM current-density limits for the gcd_em_via_per_cut (loose) regression (Nangate45 layers).
+# <routing layer> <A/um^2>   |   <cut layer> per_cut <A per cut>
+metal1 1.0
+metal2 1.0
+metal3 1.0
+metal4 1.0
+metal5 1.0
+metal6 1.0
+metal7 1.0
+metal8 1.0
+metal9 1.0
+metal10 1.0
+via1 per_cut 1.0
+via2 per_cut 1.0
+via3 per_cut 1.0
+via4 per_cut 1.0
+via5 per_cut 1.0
+via6 per_cut 1.0
+via7 per_cut 1.0
+via8 per_cut 1.0
+via9 per_cut 1.0

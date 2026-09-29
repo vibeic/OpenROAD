@@ -118,7 +118,13 @@ TEST(EMSignoff, ZeroCurrentAndUnknownGeometryNeverViolate)
   EXPECT_EQ(res.checked, 1u);          // only the zero-current wire had geometry
   EXPECT_EQ(res.skipped_no_area, 2u);  // the two area<=0 wires
   EXPECT_EQ(res.violations, 0u);
-  EXPECT_TRUE(res.pass());
+  // Unknown geometry never violates, but a segment that was not judged is
+  // never a clean result either: the verdict is NOT_MEASURED, not PASS.
+  EXPECT_FALSE(res.pass());
+  EXPECT_STREQ(res.verdict(), "NOT_MEASURED");
+  EXPECT_EQ(res.no_area_by_layer.at("metal2"), 1u);
+  EXPECT_EQ(res.no_area_by_layer.at("metal3"), 1u);
+  EXPECT_EQ(res.wires.size(), 3u);  // the skipped ones are listed, not dropped
 }
 
 TEST(EMSignoff, MissingLimitCannotFail)
@@ -136,7 +142,45 @@ TEST(EMSignoff, MissingLimitCannotFail)
   EXPECT_EQ(res.limited, 0u);
   EXPECT_EQ(res.skipped_no_limit, 1u);
   EXPECT_EQ(res.violations, 0u);
+  // A missing limit cannot manufacture a FAIL -- nor a PASS: the segment was
+  // not judged, so the verdict is NOT_MEASURED.
+  EXPECT_FALSE(res.pass());
+  EXPECT_STREQ(res.verdict(), "NOT_MEASURED");
+  EXPECT_EQ(res.no_limit_by_layer.at("metal1"), 1u);
+}
+
+TEST(EMSignoff, ViaIsJudgedPerCutAgainstItsCutLayer)
+{
+  // A 4-cut via carrying 4e-4 A: 1e-4 A per cut.
+  EMWireCurrent via{"via1", 4.0e-4, 0.0, true, 0, 0, 0, 0};
+  via.cuts = 4;
+  EMLimits limits;
+  limits.per_cut["via1"] = 1.5e-4;  // A per cut
+  EMSignoffResult res = classifyCurrentDensity({via}, limits);
+  EXPECT_EQ(res.checked, 1u);
+  EXPECT_EQ(res.per_cut, 1u);
+  EXPECT_EQ(res.violations, 0u);
   EXPECT_TRUE(res.pass());
+  EXPECT_EQ(res.wires.at(0).basis, "PER_CUT");
+  EXPECT_DOUBLE_EQ(res.wires.at(0).j, 1.0e-4);
+
+  limits.per_cut["via1"] = 0.9e-4;  // below the per-cut current
+  res = classifyCurrentDensity({via}, limits);
+  EXPECT_EQ(res.violations, 1u);
+  EXPECT_STREQ(res.verdict(), "FAIL");
+}
+
+TEST(EMSignoff, ViaWithAreaIsJudgedOnItsCutArea)
+{
+  // No per-cut limit: an areal limit applies to J = I / (cuts x cut area).
+  EMWireCurrent via{"via1", 4.0e-4, 4 * 0.0676, true, 0, 0, 0, 0};
+  via.cuts = 4;
+  EMLimits limits;
+  limits.per_layer["via1"] = 1.0e-3;  // A/um^2
+  const EMSignoffResult res = classifyCurrentDensity({via}, limits);
+  EXPECT_EQ(res.wires.at(0).basis, "AREAL");
+  EXPECT_NEAR(res.wires.at(0).j, 4.0e-4 / (4 * 0.0676), 1e-12);
+  EXPECT_EQ(res.violations, 1u);
 }
 
 }  // namespace

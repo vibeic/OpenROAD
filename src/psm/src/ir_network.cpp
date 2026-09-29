@@ -516,6 +516,7 @@ IRNetwork::generatePolygonsFromBox(odb::dbBox* box,
         transform.apply(rect);
 
         shapes.insert(odb::geom::toPolygon90(rect));
+        drawn_rects_[layer].push_back(rect);
       }
     }
   } else {
@@ -527,6 +528,7 @@ IRNetwork::generatePolygonsFromBox(odb::dbBox* box,
       odb::Rect rect = box->getBox();
       transform.apply(rect);
       shapes_by_layer[layer].insert(odb::geom::toPolygon90(rect));
+      drawn_rects_[layer].push_back(rect);
     }
   }
 
@@ -1116,11 +1118,13 @@ void IRNetwork::generateCutNodesForSBox(
     auto top_node = std::make_unique<Node>(via_center, top);
 
     int cuts = 0;
+    double cut_area = 0.0;
     for (const auto& shape : via_shapes) {
       cuts += getEffectiveNumberOfCuts(shape);
+      cut_area += static_cast<double>(shape.getBox().area());
     }
     new_connections.push_back(std::make_unique<ViaConnection>(
-        bottom_node.get(), top_node.get(), cuts));
+        bottom_node.get(), top_node.get(), cuts, cut_area));
 
     new_nodes.push_back(std::move(top_node));
     new_nodes.push_back(std::move(bottom_node));
@@ -1132,7 +1136,10 @@ void IRNetwork::generateCutNodesForSBox(
       auto top_node = std::make_unique<Node>(via.center(), top);
 
       new_connections.push_back(std::make_unique<ViaConnection>(
-          bottom_node.get(), top_node.get(), getEffectiveNumberOfCuts(shape)));
+          bottom_node.get(),
+          top_node.get(),
+          getEffectiveNumberOfCuts(shape),
+          static_cast<double>(via.area())));
 
       new_nodes.push_back(std::move(top_node));
       new_nodes.push_back(std::move(bottom_node));
@@ -1358,6 +1365,35 @@ void IRNetwork::sortConnections()
   std::ranges::stable_sort(connections_, [](const auto& lhs, const auto& rhs) {
     return lhs->compare(rhs);
   });
+}
+
+int IRNetwork::getDrawnWidth(odb::dbTechLayer* layer,
+                             const odb::Point& p0,
+                             const odb::Point& p1) const
+{
+  const auto it = drawn_rects_.find(layer);
+  if (it == drawn_rects_.end()) {
+    return 0;
+  }
+  // The solver slices the union of every drawn shape on a layer into maximal
+  // rectangles; a node pair inside a via enclosure that overhangs a wire can
+  // land in a thin slice of that decomposition, whose extent is not any drawn
+  // metal.  The EM cross-section is taken from the drawn shapes instead.
+  const bool horizontal = std::abs(p1.getX() - p0.getX())
+                          >= std::abs(p1.getY() - p0.getY());
+  const odb::Point mid((p0.getX() + p1.getX()) / 2,
+                       (p0.getY() + p1.getY()) / 2);
+  int both = 0;
+  int at_mid = 0;
+  for (const odb::Rect& rect : it->second) {
+    const int across = horizontal ? rect.dy() : rect.dx();
+    if (rect.intersects(p0) && rect.intersects(p1)) {
+      both = both == 0 ? across : std::min(both, across);
+    } else if (rect.intersects(mid)) {
+      at_mid = at_mid == 0 ? across : std::min(at_mid, across);
+    }
+  }
+  return both != 0 ? both : at_mid;
 }
 
 int IRNetwork::getEffectiveNumberOfCuts(const odb::dbShape& shape) const

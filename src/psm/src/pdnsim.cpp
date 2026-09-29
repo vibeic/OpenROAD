@@ -203,10 +203,23 @@ EMSignoffResult PDNSim::checkCurrentDensity(
       if (hash != std::string::npos) {
         line = line.substr(0, hash);
       }
+      // "<layer> <A_per_um2>" or "<cut layer> per_cut <A_per_cut>".
       std::istringstream ss(line);
       std::string layer;
+      std::string field;
+      if (!(ss >> layer >> field)) {
+        continue;
+      }
       double value = 0.0;
-      if (ss >> layer >> value) {
+      if (field == "per_cut") {
+        if (ss >> value) {
+          limits.per_cut[layer] = value;
+          nrows++;
+        }
+        continue;
+      }
+      std::istringstream vs(field);
+      if (vs >> value) {
         limits.per_layer[layer] = value;
         nrows++;
       }
@@ -216,6 +229,44 @@ EMSignoffResult PDNSim::checkCurrentDensity(
                   "Loaded {} per-layer EM current-density limit(s) from {}.",
                   nrows,
                   limits_file);
+  }
+
+  if (limits.empty()) {
+    // The tech LEF's own DCCURRENTDENSITY AVERAGE limits, spec-literally
+    // (LEF/DEF reference): a ROUTING layer's value is mA per um of width,
+    // i.e. value * 1e-3 / THICKNESS A/um^2; a CUT layer's value is mA per
+    // um^2 of cut area, i.e. value * 1e-3 A/um^2.
+    const double dbu = net->getBlock()->getDbUnitsPerMicron();
+    int nrows = 0;
+    for (odb::dbTechLayer* layer : net->getBlock()->getTech()->getLayers()) {
+      const std::string key
+          = fmt::format("LEF_DCCURRENTDENSITY_AVERAGE:{}", layer->getName());
+      auto* prop = odb::dbDoubleProperty::find(net->getBlock()->getTech(),
+                                               key.c_str());
+      if (prop == nullptr || prop->getValue() <= 0.0) {
+        continue;
+      }
+      const double value = prop->getValue();
+      if (layer->getType() == odb::dbTechLayerType::ROUTING) {
+        uint32_t thickness = 0;
+        if (layer->getThickness(thickness) && thickness > 0) {
+          limits.per_layer[layer->getName()] = value * 1e-3 / (thickness / dbu);
+          nrows++;
+        }
+      } else if (layer->getType() == odb::dbTechLayerType::CUT) {
+        limits.per_layer[layer->getName()] = value * 1e-3;
+        nrows++;
+      }
+    }
+    if (nrows > 0) {
+      logger_->info(utl::PSM,
+                    118,
+                    "No EM limit given: using {} per-layer limit(s) from the "
+                    "tech LEF DCCURRENTDENSITY AVERAGE, per the LEF reference "
+                    "units (routing mA/um / THICKNESS, cut mA/um^2 of cut "
+                    "area).",
+                    nrows);
+    }
   }
 
   if (limits.empty()) {
