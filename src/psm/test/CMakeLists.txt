@@ -38,6 +38,7 @@ or_integration_tests(
     gcd_em_density_vdd
     gcd_em_via_per_cut
     gcd_em_no_silent_skip
+    em_pad_ring_abutment
     gcd_em_drawn_width
     em_lef_default_limits
     gcd_signal_em

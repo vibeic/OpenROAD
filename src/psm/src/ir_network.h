@@ -128,9 +128,10 @@ class IRNetwork
     return interdie_connections_.size();
   }
 
-  // Width [DBU] of the narrowest drawn rectangle on `layer` that carries the
-  // segment p0-p1 (contains both ends; else its midpoint), measured across
-  // the segment's direction.  0 when no drawn rectangle covers it.
+  // Width [DBU] of the drawn metal on `layer` that carries the segment p0-p1,
+  // measured across the segment's direction: the narrowest position along
+  // the segment, each position as wide as the widest drawn rectangle covering
+  // it (emDrawnWidthAcross).  0 when part of the segment has no drawn metal.
   int getDrawnWidth(odb::dbTechLayer* layer,
                     const odb::Point& p0,
                     const odb::Point& p1) const;
@@ -294,6 +295,10 @@ class IRNetwork
   // pins), as drawn -- before the per-layer union is sliced into the solver's
   // shapes.  EM current density judges a wire on this geometry.
   mutable LayerMap<std::vector<odb::Rect>> drawn_rects_;
+  using DrawnRectTree
+      = boost::geometry::index::rtree<odb::Rect,
+                                      boost::geometry::index::quadratic<16>>;
+  mutable LayerMap<std::unique_ptr<DrawnRectTree>> drawn_index_;
 
   Connections connections_;
 

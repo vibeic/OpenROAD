@@ -33,8 +33,8 @@ No area (skipped)  : 0
 Worst J            : 3.775e-04 A/um^2 (layer metal4)
 Worst J-limit      : 2.000e-04 A/um^2
 Worst utilization  : 188.74 %
-Violations         : 23
+Violations         : 16
 Verdict            : FAIL
 ###############################################
-[WARNING PSM-0112] EM current-density signoff FAILED for net VDD: 23 segment(s) exceed the per-layer J-limit (worst 188.7% of limit on metal4).
-EM3 self-check: loose=0 (PASS) tight=23 (FAIL) OK
+[WARNING PSM-0112] EM current-density signoff FAILED for net VDD: 16 segment(s) exceed the per-layer J-limit (worst 188.7% of limit on metal4).
+EM3 self-check: loose=0 (PASS) tight=16 (FAIL) OK

@@ -47,6 +47,7 @@ COMPULSORY_TESTS = [
     "gcd_em_density_vdd",
     "gcd_em_via_per_cut",
     "gcd_em_no_silent_skip",
+    "em_pad_ring_abutment",
     "gcd_em_drawn_width",
     "em_lef_default_limits",
     "gcd_signal_em",
@@ -220,6 +221,11 @@ filegroup(
     ],
 )
 
+# Data a test reads from another test's files.
+EXTRA_TEST_DATA = {
+    "em_pad_ring_abutment": ["pad_connected_by_abutment.def"],
+}
+
 [
     filegroup(
         name = test_name + "_resources",
@@ -227,7 +233,7 @@ filegroup(
             [
                 test_name + ".*",
             ],
-        ),
+        ) + EXTRA_TEST_DATA.get(test_name, []),
     )
     for test_name in ALL_TESTS
 ]

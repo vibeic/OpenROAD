@@ -28,6 +28,7 @@
 #include "odb/dbTransform.h"
 #include "odb/geom.h"
 #include "odb/geom_boost.h"
+#include "psm/em_signoff.h"
 #include "shape.h"
 #include "utl/Logger.h"
 #include "utl/timer.h"
@@ -154,6 +155,8 @@ void IRNetwork::reset()
 
   iterm_nodes_.clear();
   bpin_nodes_.clear();
+  drawn_rects_.clear();
+  drawn_index_.clear();
 
   recoverMemory();
 }
@@ -1379,21 +1382,20 @@ int IRNetwork::getDrawnWidth(odb::dbTechLayer* layer,
   // rectangles; a node pair inside a via enclosure that overhangs a wire can
   // land in a thin slice of that decomposition, whose extent is not any drawn
   // metal.  The EM cross-section is taken from the drawn shapes instead.
-  const bool horizontal = std::abs(p1.getX() - p0.getX())
-                          >= std::abs(p1.getY() - p0.getY());
-  const odb::Point mid((p0.getX() + p1.getX()) / 2,
-                       (p0.getY() + p1.getY()) / 2);
-  int both = 0;
-  int at_mid = 0;
-  for (const odb::Rect& rect : it->second) {
-    const int across = horizontal ? rect.dy() : rect.dx();
-    if (rect.intersects(p0) && rect.intersects(p1)) {
-      both = both == 0 ? across : std::min(both, across);
-    } else if (rect.intersects(mid)) {
-      at_mid = at_mid == 0 ? across : std::min(at_mid, across);
-    }
+  auto& index = drawn_index_[layer];
+  if (index == nullptr) {
+    index = std::make_unique<DrawnRectTree>(it->second.begin(),
+                                            it->second.end());
   }
-  return both != 0 ? both : at_mid;
+  const odb::Rect span(p0, p1);
+  std::vector<EMDrawnRect> crossed;
+  for (auto itr = index->qbegin(boost::geometry::index::intersects(span));
+       itr != index->qend();
+       itr++) {
+    crossed.push_back({itr->xMin(), itr->yMin(), itr->xMax(), itr->yMax()});
+  }
+  return emDrawnWidthAcross(
+      crossed, p0.getX(), p0.getY(), p1.getX(), p1.getY());
 }
 
 int IRNetwork::getEffectiveNumberOfCuts(const odb::dbShape& shape) const

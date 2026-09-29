@@ -183,5 +183,57 @@ TEST(EMSignoff, ViaWithAreaIsJudgedOnItsCutArea)
   EXPECT_EQ(res.violations, 1u);
 }
 
+// Drawn width (DBU) of the metal carrying a segment: the narrowest position
+// along the segment, each position as wide as its widest covering shape.
+
+TEST(EMDrawnWidth, ChainOfAbuttingShapesIsJudgedOnItsNarrowestLink)
+{
+  // Three abutting pin rectangles along x, the middle one narrow.  Neither
+  // end nor the midpoint of the segment lies in the narrow link, and no
+  // single rectangle contains both ends.
+  const std::vector<EMDrawnRect> chain{{0, 0, 10000, 1000},
+                                       {10000, 0, 11000, 300},
+                                       {11000, 0, 30000, 1000}};
+  EXPECT_EQ(emDrawnWidthAcross(chain, 1000, 150, 29000, 150), 300);
+  // Same chain along y.
+  const std::vector<EMDrawnRect> column{{0, 0, 1000, 10000},
+                                        {0, 10000, 300, 11000},
+                                        {0, 11000, 1000, 30000}};
+  EXPECT_EQ(emDrawnWidthAcross(column, 150, 1000, 150, 29000), 300);
+}
+
+TEST(EMDrawnWidth, TwoLinkChainIsJudgedOnTheNarrowLinkNotTheMidpoint)
+{
+  // The midpoint (x=8000) lies in the wide shape; the segment still crosses
+  // into the narrow one.
+  const std::vector<EMDrawnRect> chain{{0, 0, 12000, 1000},
+                                       {12000, 0, 20000, 200}};
+  EXPECT_EQ(emDrawnWidthAcross(chain, 2000, 100, 14000, 100), 200);
+}
+
+TEST(EMDrawnWidth, WireUnderANarrowerEnclosureIsJudgedOnTheWire)
+{
+  // A via enclosure sits on a 600-wide wire; it is narrower across the wire
+  // but the metal there is the wire.
+  const std::vector<EMDrawnRect> shapes{{0, 0, 20000, 600},
+                                        {5000, 50, 6000, 550}};
+  EXPECT_EQ(emDrawnWidthAcross(shapes, 5200, 300, 5800, 300), 600);
+  EXPECT_EQ(emDrawnWidthAcross(shapes, 1000, 300, 9000, 300), 600);
+}
+
+TEST(EMDrawnWidth, UncoveredStretchHasNoArea)
+{
+  const std::vector<EMDrawnRect> gap{{0, 0, 1000, 500}, {2000, 0, 3000, 500}};
+  EXPECT_EQ(emDrawnWidthAcross(gap, 500, 250, 2500, 250), 0);
+  EXPECT_EQ(emDrawnWidthAcross({}, 0, 0, 100, 0), 0);
+}
+
+TEST(EMDrawnWidth, SingleShapeAndPointSegment)
+{
+  const std::vector<EMDrawnRect> wire{{0, 0, 10000, 400}};
+  EXPECT_EQ(emDrawnWidthAcross(wire, 100, 200, 9900, 200), 400);
+  EXPECT_EQ(emDrawnWidthAcross(wire, 5000, 200, 5000, 200), 400);
+}
+
 }  // namespace
 }  // namespace psm

@@ -22,9 +22,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdlib>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace psm {
@@ -213,6 +216,118 @@ inline EMSignoffResult classifyCurrentDensity(
     }
   }
   return res;
+}
+
+// A drawn metal rectangle [DBU] (a wire, a via enclosure or a pin shape).
+struct EMDrawnRect
+{
+  int xlo = 0;
+  int ylo = 0;
+  int xhi = 0;
+  int yhi = 0;
+};
+
+// Width [DBU] of the drawn metal that carries the straight segment
+// (x0,y0)-(x1,y1), measured across the segment's direction (the extent in y
+// for a segment that runs mostly along x, and vice versa).
+//
+// At each position along the segment the metal is at least as wide as the
+// widest drawn rectangle covering the segment there; the segment is limited
+// by its narrowest position.  So a segment across a chain of abutting shapes
+// (the pin rectangles of abutted cells, a wire meeting a narrower wire) is
+// judged on the narrowest link it crosses, wherever its ends and midpoint
+// fall, and a segment along a wire under a narrower overlapping shape (a via
+// enclosure) is judged on the wire.  Returns 0 when some part of the segment
+// is covered by no rectangle.
+inline int emDrawnWidthAcross(const std::vector<EMDrawnRect>& rects,
+                              int x0,
+                              int y0,
+                              int x1,
+                              int y1)
+{
+  const bool along_x = std::abs(x1 - x0) >= std::abs(y1 - y0);
+  // a: coordinate along the segment's direction; m: across it.
+  const double a0 = along_x ? x0 : y0;
+  const double a1 = along_x ? x1 : y1;
+  const double m0 = along_x ? y0 : x0;
+  const double m1 = along_x ? y1 : x1;
+  const double lo = std::min(a0, a1);
+  const double hi = std::max(a0, a1);
+  auto m_at = [&](double a) {
+    return a1 == a0 ? m0 : m0 + (m1 - m0) * (a - a0) / (a1 - a0);
+  };
+
+  struct Span
+  {
+    double s, e;  // covered stretch along the segment
+    double mlo, mhi;  // the rectangle's extent across it
+    int across;
+  };
+  std::vector<Span> spans;
+  std::vector<double> cuts{lo, hi};
+  for (const EMDrawnRect& r : rects) {
+    const double rlo = along_x ? r.xlo : r.ylo;
+    const double rhi = along_x ? r.xhi : r.yhi;
+    const double mlo = along_x ? r.ylo : r.xlo;
+    const double mhi = along_x ? r.yhi : r.xhi;
+    double s = std::max(lo, rlo);
+    double e = std::min(hi, rhi);
+    if (s > e) {
+      continue;
+    }
+    if (a1 != a0 && m1 != m0) {
+      // A slanted segment is inside the rectangle only between the positions
+      // where it crosses the rectangle's across-extent.
+      const double ca = a0 + (mlo - m0) * (a1 - a0) / (m1 - m0);
+      const double cb = a0 + (mhi - m0) * (a1 - a0) / (m1 - m0);
+      s = std::max(s, std::min(ca, cb));
+      e = std::min(e, std::max(ca, cb));
+      if (s > e) {
+        continue;
+      }
+    } else {
+      const double m = m_at(s);
+      if (m < mlo || m > mhi) {
+        continue;
+      }
+    }
+    spans.push_back({s, e, mlo, mhi, static_cast<int>(mhi - mlo)});
+    cuts.push_back(s);
+    cuts.push_back(e);
+  }
+  if (spans.empty()) {
+    return 0;
+  }
+
+  auto widest_over = [&](double s, double e) {
+    int widest = 0;
+    for (const Span& span : spans) {
+      if (span.s <= s && span.e >= e) {
+        widest = std::max(widest, span.across);
+      }
+    }
+    return widest;
+  };
+
+  if (lo == hi) {
+    // Both ends on one point across the segment's direction.
+    return widest_over(lo, hi);
+  }
+  std::ranges::sort(cuts);
+  int narrowest = 0;
+  for (std::size_t i = 0; i + 1 < cuts.size(); i++) {
+    const double s = std::max(cuts[i], lo);
+    const double e = std::min(cuts[i + 1], hi);
+    if (e <= s) {
+      continue;
+    }
+    const int widest = widest_over(s, e);
+    if (widest == 0) {
+      return 0;
+    }
+    narrowest = narrowest == 0 ? widest : std::min(narrowest, widest);
+  }
+  return narrowest;
 }
 
 }  // namespace psm

@@ -1,0 +1,45 @@
+[INFO ODB-0227] LEF file: ihp-sg13g2_data/sg13g2_tech.lef, created 19 layers, 300 vias
+[INFO ODB-0227] LEF file: ihp-sg13g2_data/sg13g2_stdcell.lef, created 78 library cells
+[INFO ODB-0227] LEF file: ihp-sg13g2_data/IOLib.lef, created 34 library cells
+[INFO ODB-0128] Design: CantConnect
+[INFO ODB-0130]     Created 5 pins.
+[INFO ODB-0131]     Created 64 components and 281 component-terminals.
+[INFO ODB-0132]     Created 11 special nets and 249 connections.
+[INFO ODB-0133]     Created 11 nets and 27 connections.
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0073] Using bump pattern on TopMetal2 with x-pitch 140.0000um, y-pitch 140.0000um, and size 70.0000um with a reduction factor of 3x.
+########## IR report #################
+Net              : VDD
+Corner           : default
+Total power      : 8.69e-06 W
+Supply voltage   : 1.20e+00 V
+Worstcase voltage: 1.20e+00 V
+Average voltage  : 1.20e+00 V
+Average IR drop  : 1.15e-07 V
+Worstcase IR drop: 6.30e-06 V
+Percentage drop  : 0.00 %
+######################################
+########## EM analysis ###############
+Net                : VDD
+Corner             : default
+Maximum current    : 2.03e-06 A
+Average current    : 3.56e-08 A
+Number of resistors: 4893
+######################################
+[INFO PSM-0040] All shapes on net VDD are connected.
+[INFO PSM-0115] Loaded 14 per-layer EM current-density limit(s) from em_pad_ring_abutment.limits.
+########## EM current-density signoff ##########
+Net                : VDD
+Corner             : default
+Segments checked   : 4893
+With J-limit       : 4893
+Vias judged per cut: 2770
+No J-limit (skipped): 0
+No area (skipped)  : 0
+Worst J            : 1.055e-05 A/um^2 (layer Metal1)
+Worst J-limit      : 1.000e+00 A/um^2
+Worst utilization  : 0.00 %
+Violations         : 0
+Verdict            : PASS
+###############################################
+EM pad-ring self-check: solved=4893 listed=4893 pin-metal segments=173 carrying=162 NO_AREA=0 OK
