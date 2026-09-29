@@ -4,16 +4,17 @@
 // EM current-density signoff (EM3) -- a pure, header-only rule engine.
 //
 // It consumes per-wire currents (I) and current-carrying cross-section areas
-// (A) -- the quantities PSM's static/EM power-grid solve already produces -- and
-// flags every metal/via segment whose DC current density
+// (A) -- the quantities PSM's static/EM power-grid solve already produces --
+// and flags every metal/via segment whose DC current density
 //
 //     J = I / A
 //
 // exceeds a per-layer limit.  The J-limits themselves are foundry data (they
 // live in the PDK, Y*): this engine consumes them where a PDK or the user
-// supplies them and otherwise falls back to an explicit, documented placeholder.
-// The ENGINE in this file is chip/PDK agnostic -- it contains no SKU, no rule
-// id, and no foundry constant; it only implements J = I/A vs a limit.
+// supplies them and otherwise falls back to an explicit, documented
+// placeholder. The ENGINE in this file is chip/PDK agnostic -- it contains no
+// SKU, no rule id, and no foundry constant; it only implements J = I/A vs a
+// limit.
 //
 // The file is header-only and depends on nothing but the C++ standard library
 // (mirroring transient.h) so the correctness gate can drive the classification
@@ -64,9 +65,9 @@ struct EMWireCurrent
 // its current per cut, current / cuts, against that limit.
 struct EMLimits
 {
-  double default_limit = 0.0;                // A/um^2  (<= 0 => none)
-  std::map<std::string, double> per_layer;   // layer name -> A/um^2
-  std::map<std::string, double> per_cut;     // cut layer name -> A per cut
+  double default_limit = 0.0;               // A/um^2  (<= 0 => none)
+  std::map<std::string, double> per_layer;  // layer name -> A/um^2
+  std::map<std::string, double> per_cut;    // cut layer name -> A per cut
 
   double limitFor(const std::string& layer) const
   {
@@ -95,10 +96,10 @@ struct EMWireResult
   std::string layer;
   double current_a = 0.0;
   double area_um2 = 0.0;
-  double j = 0.0;          // A/um^2 == current_a / area_um2
-  double limit = 0.0;      // A/um^2 applied (<= 0 => no limit for this layer)
-  double ratio = 0.0;      // j / limit (0 when no limit)
-  bool violated = false;   // limit > 0 && j > limit
+  double j = 0.0;         // A/um^2 == current_a / area_um2
+  double limit = 0.0;     // A/um^2 applied (<= 0 => no limit for this layer)
+  double ratio = 0.0;     // j / limit (0 when no limit)
+  bool violated = false;  // limit > 0 && j > limit
   bool is_via = false;
   int cuts = 0;
   // How the segment was judged: "AREAL" (J = I/A vs A/um^2), "PER_CUT"
@@ -114,20 +115,20 @@ struct EMWireResult
 // Aggregate signoff verdict over all classified segments.
 struct EMSignoffResult
 {
-  std::size_t total = 0;             // segments presented
-  std::size_t checked = 0;           // segments with usable geometry (area > 0)
-  std::size_t limited = 0;           // checked segments that had a positive limit
-  std::size_t violations = 0;        // limited segments with j > limit
+  std::size_t total = 0;       // segments presented
+  std::size_t checked = 0;     // segments with usable geometry (area > 0)
+  std::size_t limited = 0;     // checked segments that had a positive limit
+  std::size_t violations = 0;  // limited segments with j > limit
   std::size_t skipped_no_area = 0;   // not judged: missing geometry
   std::size_t skipped_no_limit = 0;  // not judged: no J-limit for the layer
   std::size_t per_cut = 0;           // vias judged per cut
   std::map<std::string, std::size_t> no_area_by_layer;
   std::map<std::string, std::size_t> no_limit_by_layer;
-  double worst_j = 0.0;              // A/um^2 at the worst utilization
-  double worst_limit = 0.0;          // A/um^2 at the worst utilization
-  double worst_ratio = 0.0;          // max (j / limit) over limited segments
+  double worst_j = 0.0;      // A/um^2 at the worst utilization
+  double worst_limit = 0.0;  // A/um^2 at the worst utilization
+  double worst_ratio = 0.0;  // max (j / limit) over limited segments
   std::string worst_layer;
-  std::vector<EMWireResult> wires;   // per-segment detail (for the report)
+  std::vector<EMWireResult> wires;  // per-segment detail (for the report)
 
   // Every segment judged and none over its limit.  A segment that was not
   // judged (no geometry or no limit) is never a clean result.
@@ -259,7 +260,7 @@ inline int emDrawnWidthAcross(const std::vector<EMDrawnRect>& rects,
 
   struct Span
   {
-    double s, e;  // covered stretch along the segment
+    double s, e;      // covered stretch along the segment
     double mlo, mhi;  // the rectangle's extent across it
     int across;
   };

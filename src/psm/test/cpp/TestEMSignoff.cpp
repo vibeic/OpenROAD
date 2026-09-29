@@ -4,13 +4,14 @@
 // Unfakeable correctness gate for the EM current-density signoff rule engine
 // (EM3) in em_signoff.h.
 //
-// The engine's job is a single, hand-computable rule: for every current-carrying
-// segment, the DC current density is J = I / A, and the segment is a violation
-// iff J exceeds the per-layer limit.  Every case below feeds a wire with a KNOWN
-// current and a KNOWN cross-section area, computes J by hand, and asserts that
-// the engine reports exactly that J and the correct PASS/FAIL verdict.  Because
-// this is the same classifier IRSolver::checkCurrentDensity() drives with real
-// solved currents + real LEF geometry, a pass here is a pass on the rule.
+// The engine's job is a single, hand-computable rule: for every
+// current-carrying segment, the DC current density is J = I / A, and the
+// segment is a violation iff J exceeds the per-layer limit.  Every case below
+// feeds a wire with a KNOWN current and a KNOWN cross-section area, computes J
+// by hand, and asserts that the engine reports exactly that J and the correct
+// PASS/FAIL verdict.  Because this is the same classifier
+// IRSolver::checkCurrentDensity() drives with real solved currents + real LEF
+// geometry, a pass here is a pass on the rule.
 
 #include <cmath>
 #include <vector>
@@ -23,9 +24,9 @@ namespace {
 
 // A wire carrying I = 1.0 mA through a 0.10 um x 0.20 um cross-section has a
 // hand-computed current density J = 1e-3 / (0.10 * 0.20) = 0.05 A/um^2.
-constexpr double kI = 1.0e-3;     // A
-constexpr double kW = 0.10;       // um
-constexpr double kT = 0.20;       // um
+constexpr double kI = 1.0e-3;      // A
+constexpr double kW = 0.10;        // um
+constexpr double kT = 0.20;        // um
 constexpr double kArea = kW * kT;  // 0.02 um^2
 constexpr double kJ = kI / kArea;  // 0.05 A/um^2
 
@@ -91,7 +92,7 @@ TEST(EMSignoff, PerLayerLimitsBeatDefault)
   wires.push_back({"metal2", kI, kArea, false, 0, 0, 0, 0});
 
   EMLimits limits;
-  limits.default_limit = kJ * 2.0;      // loose default -> metal2 ok
+  limits.default_limit = kJ * 2.0;        // loose default -> metal2 ok
   limits.per_layer["metal1"] = kJ * 0.5;  // tight -> metal1 violated
 
   const EMSignoffResult res = classifyCurrentDensity(wires, limits);
@@ -115,7 +116,7 @@ TEST(EMSignoff, ZeroCurrentAndUnknownGeometryNeverViolate)
 
   const EMSignoffResult res = classifyCurrentDensity(wires, limits);
   EXPECT_EQ(res.total, 3u);
-  EXPECT_EQ(res.checked, 1u);          // only the zero-current wire had geometry
+  EXPECT_EQ(res.checked, 1u);  // only the zero-current wire had geometry
   EXPECT_EQ(res.skipped_no_area, 2u);  // the two area<=0 wires
   EXPECT_EQ(res.violations, 0u);
   // Unknown geometry never violates, but a segment that was not judged is
@@ -191,14 +192,12 @@ TEST(EMDrawnWidth, ChainOfAbuttingShapesIsJudgedOnItsNarrowestLink)
   // Three abutting pin rectangles along x, the middle one narrow.  Neither
   // end nor the midpoint of the segment lies in the narrow link, and no
   // single rectangle contains both ends.
-  const std::vector<EMDrawnRect> chain{{0, 0, 10000, 1000},
-                                       {10000, 0, 11000, 300},
-                                       {11000, 0, 30000, 1000}};
+  const std::vector<EMDrawnRect> chain{
+      {0, 0, 10000, 1000}, {10000, 0, 11000, 300}, {11000, 0, 30000, 1000}};
   EXPECT_EQ(emDrawnWidthAcross(chain, 1000, 150, 29000, 150), 300);
   // Same chain along y.
-  const std::vector<EMDrawnRect> column{{0, 0, 1000, 10000},
-                                        {0, 10000, 300, 11000},
-                                        {0, 11000, 1000, 30000}};
+  const std::vector<EMDrawnRect> column{
+      {0, 0, 1000, 10000}, {0, 10000, 300, 11000}, {0, 11000, 1000, 30000}};
   EXPECT_EQ(emDrawnWidthAcross(column, 150, 1000, 150, 29000), 300);
 }
 

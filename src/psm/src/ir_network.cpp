@@ -1138,11 +1138,11 @@ void IRNetwork::generateCutNodesForSBox(
       auto bottom_node = std::make_unique<Node>(via.center(), bottom);
       auto top_node = std::make_unique<Node>(via.center(), top);
 
-      new_connections.push_back(std::make_unique<ViaConnection>(
-          bottom_node.get(),
-          top_node.get(),
-          getEffectiveNumberOfCuts(shape),
-          static_cast<double>(via.area())));
+      new_connections.push_back(
+          std::make_unique<ViaConnection>(bottom_node.get(),
+                                          top_node.get(),
+                                          getEffectiveNumberOfCuts(shape),
+                                          static_cast<double>(via.area())));
 
       new_nodes.push_back(std::move(top_node));
       new_nodes.push_back(std::move(bottom_node));
@@ -1384,8 +1384,8 @@ int IRNetwork::getDrawnWidth(odb::dbTechLayer* layer,
   // metal.  The EM cross-section is taken from the drawn shapes instead.
   auto& index = drawn_index_[layer];
   if (index == nullptr) {
-    index = std::make_unique<DrawnRectTree>(it->second.begin(),
-                                            it->second.end());
+    index
+        = std::make_unique<DrawnRectTree>(it->second.begin(), it->second.end());
   }
   const odb::Rect span(p0, p1);
   std::vector<EMDrawnRect> crossed;
