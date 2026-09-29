@@ -3374,10 +3374,15 @@ EMSignoffResult IRSolver::checkCurrentDensity(
   for (const auto& [layer, count] : results.no_area_by_layer) {
     logger_->report("  NO_AREA  {:<12}: {}", layer, count);
   }
-  logger_->report("Worst J            : {:3.3e} A/um^2 (layer {})",
+  // A via judged per cut carries current per cut, not current density.
+  const char* worst_unit
+      = results.worst_basis == "PER_CUT" ? "A/cut" : "A/um^2";
+  logger_->report("Worst J            : {:3.3e} {} (layer {})",
                   results.worst_j,
+                  worst_unit,
                   results.worst_layer.empty() ? "-" : results.worst_layer);
-  logger_->report("Worst J-limit      : {:3.3e} A/um^2", results.worst_limit);
+  logger_->report(
+      "Worst J-limit      : {:3.3e} {}", results.worst_limit, worst_unit);
   logger_->report("Worst utilization  : {:3.2f} %",
                   100.0 * results.worst_ratio);
   logger_->report("Violations         : {}", results.violations);

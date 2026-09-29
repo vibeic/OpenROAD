@@ -124,10 +124,13 @@ struct EMSignoffResult
   std::size_t per_cut = 0;           // vias judged per cut
   std::map<std::string, std::size_t> no_area_by_layer;
   std::map<std::string, std::size_t> no_limit_by_layer;
-  double worst_j = 0.0;      // A/um^2 at the worst utilization
-  double worst_limit = 0.0;  // A/um^2 at the worst utilization
+  double worst_j = 0.0;      // j at the worst utilization
+  double worst_limit = 0.0;  // limit at the worst utilization
   double worst_ratio = 0.0;  // max (j / limit) over limited segments
   std::string worst_layer;
+  // Basis of the worst segment: "PER_CUT" (worst_j / worst_limit in A per
+  // cut) or "AREAL" (in A/um^2); empty when no segment was limited.
+  std::string worst_basis;
   std::vector<EMWireResult> wires;  // per-segment detail (for the report)
 
   // Every segment judged and none over its limit.  A segment that was not
@@ -205,6 +208,7 @@ inline EMSignoffResult classifyCurrentDensity(
         res.worst_j = r.j;
         res.worst_limit = r.limit;
         res.worst_layer = r.layer;
+        res.worst_basis = r.basis;
       }
     } else {
       res.skipped_no_limit++;

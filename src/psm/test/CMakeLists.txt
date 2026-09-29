@@ -40,6 +40,7 @@ or_integration_tests(
     gcd_em_no_silent_skip
     em_pad_ring_abutment
     gcd_em_drawn_width
+    gcd_em_rebuild_drawn_rects
     em_lef_default_limits
     gcd_signal_em
     gcd_gt2n_backside

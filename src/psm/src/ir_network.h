@@ -260,7 +260,8 @@ class IRNetwork
                                Connections& new_connections);
   LayerMap<odb::geom::BoostPolygon90Set> generatePolygonsFromBox(
       odb::dbBox* box,
-      const odb::dbTransform& transform) const;
+      const odb::dbTransform& transform);
+  void indexDrawnRects();
 
   TerminalTree getTerminalTree(
       const std::vector<TerminalNode*>& terminals) const;
@@ -294,11 +295,13 @@ class IRNetwork
   // Every drawn routing-layer rectangle of the net (wires, via enclosures,
   // pins), as drawn -- before the per-layer union is sliced into the solver's
   // shapes.  EM current density judges a wire on this geometry.
-  mutable LayerMap<std::vector<odb::Rect>> drawn_rects_;
+  LayerMap<std::vector<odb::Rect>> drawn_rects_;
+  // drawn_rects_ indexed once per layer when the network is constructed, so a
+  // drawn-width lookup visits only the rectangles near its segment.
   using DrawnRectTree
       = boost::geometry::index::rtree<odb::Rect,
                                       boost::geometry::index::quadratic<16>>;
-  mutable LayerMap<std::unique_ptr<DrawnRectTree>> drawn_index_;
+  LayerMap<DrawnRectTree> drawn_index_;
 
   Connections connections_;
 

@@ -164,6 +164,8 @@ TEST(EMSignoff, ViaIsJudgedPerCutAgainstItsCutLayer)
   EXPECT_TRUE(res.pass());
   EXPECT_EQ(res.wires.at(0).basis, "PER_CUT");
   EXPECT_DOUBLE_EQ(res.wires.at(0).j, 1.0e-4);
+  // The worst row is per cut, so its j and limit are A per cut.
+  EXPECT_EQ(res.worst_basis, "PER_CUT");
 
   limits.per_cut["via1"] = 0.9e-4;  // below the per-cut current
   res = classifyCurrentDensity({via}, limits);
@@ -182,6 +184,7 @@ TEST(EMSignoff, ViaWithAreaIsJudgedOnItsCutArea)
   EXPECT_EQ(res.wires.at(0).basis, "AREAL");
   EXPECT_NEAR(res.wires.at(0).j, 4.0e-4 / (4 * 0.0676), 1e-12);
   EXPECT_EQ(res.violations, 1u);
+  EXPECT_EQ(res.worst_basis, "AREAL");
 }
 
 // Drawn width (DBU) of the metal carrying a segment: the narrowest position

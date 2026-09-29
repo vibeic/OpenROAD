@@ -498,7 +498,7 @@ void IRNetwork::recoverMemory()
 
 IRNetwork::LayerMap<odb::geom::BoostPolygon90Set>
 IRNetwork::generatePolygonsFromBox(odb::dbBox* box,
-                                   const odb::dbTransform& transform) const
+                                   const odb::dbTransform& transform)
 {
   LayerMap<odb::geom::BoostPolygon90Set> shapes_by_layer;
 
@@ -983,6 +983,8 @@ void IRNetwork::generateRoutingLayerShapesAndNodes()
     shapes_by_layer[layer].insert(shapes);
   }
 
+  indexDrawnRects();
+
   const TerminalTree terminal_nodes = getTerminalTree(terminals);
 
   // A layer with shapes with 45 degree edges is merged with them and sliced
@@ -1370,27 +1372,33 @@ void IRNetwork::sortConnections()
   });
 }
 
+void IRNetwork::indexDrawnRects()
+{
+  const utl::DebugScopedTimer timer(
+      logger_, utl::PSM, "timer", 1, "Index drawn shapes: {}");
+
+  for (const auto& [layer, rects] : drawn_rects_) {
+    drawn_index_[layer] = DrawnRectTree(rects.begin(), rects.end());
+  }
+}
+
 int IRNetwork::getDrawnWidth(odb::dbTechLayer* layer,
                              const odb::Point& p0,
                              const odb::Point& p1) const
 {
-  const auto it = drawn_rects_.find(layer);
-  if (it == drawn_rects_.end()) {
+  const auto it = drawn_index_.find(layer);
+  if (it == drawn_index_.end()) {
     return 0;
   }
   // The solver slices the union of every drawn shape on a layer into maximal
   // rectangles; a node pair inside a via enclosure that overhangs a wire can
   // land in a thin slice of that decomposition, whose extent is not any drawn
   // metal.  The EM cross-section is taken from the drawn shapes instead.
-  auto& index = drawn_index_[layer];
-  if (index == nullptr) {
-    index
-        = std::make_unique<DrawnRectTree>(it->second.begin(), it->second.end());
-  }
+  const DrawnRectTree& index = it->second;
   const odb::Rect span(p0, p1);
   std::vector<EMDrawnRect> crossed;
-  for (auto itr = index->qbegin(boost::geometry::index::intersects(span));
-       itr != index->qend();
+  for (auto itr = index.qbegin(boost::geometry::index::intersects(span));
+       itr != index.qend();
        itr++) {
     crossed.push_back({itr->xMin(), itr->yMin(), itr->xMax(), itr->yMax()});
   }
@@ -1884,6 +1892,12 @@ void IRNetwork::reportStats() const
   }
   logger_->report("Total nodes: {}", count);
   logger_->report("Total connections: {}", connections_.size());
+  count = 0;
+  for (const auto& [layer, index] : drawn_index_) {
+    count += index.size();
+    logger_->report("Drawn rects on {}: {}", layer->getName(), index.size());
+  }
+  logger_->report("Total drawn rects: {}", count);
 }
 
 void IRNetwork::copy(Node* keep,
