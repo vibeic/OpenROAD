@@ -73,7 +73,7 @@ class RoutedStateSnapshot
     bool has_wire{false};
     std::vector<unsigned char> opcodes;
     std::vector<int> data;
-    bool wire_ordered{false};
+    bool wire_normalized_connectivity{false};
     bool has_jumpers{false};
     std::vector<GuideState> guides;
   };

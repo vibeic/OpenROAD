@@ -1,9 +1,10 @@
 # extract_parasitics MUST NOT CHANGE THE ROUTING IT MEASURES (vibeic fork).
 #
-# Ext::extract() opens with odb::orderWires(), which rewrites every non-supply
-# net's dbWire through tmg_conn::analyzeNet() so the RC tree can be walked in
-# order. That rewrite is not geometry-preserving. MEASURED on a detail-routed
-# gf180mcuD design, with nothing in the session but read_db /
+# Ext::extract() opens with odb::normalizeWireConnectivity(), which rewrites
+# every non-supply net's dbWire through WireNormalizer so the RC tree can be
+# walked in connectivity order. That rewrite is not geometry-preserving.
+# MEASURED on a detail-routed gf180mcuD design, with nothing in the session but
+# read_db /
 # define_process_corner / extract_parasitics / write_db:
 #
 #     whole-design DRC before ...... 0 violation(s)

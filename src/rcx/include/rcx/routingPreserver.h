@@ -21,10 +21,10 @@ namespace rcx {
 
 // vibeic fork: EXTRACTION MUST NOT CHANGE THE ROUTING IT MEASURES.
 //
-// Parasitic extraction begins by calling odb::orderWires(), which walks every
-// non-supply net through tmg_conn::analyzeNet() and REWRITES its dbWire into an
-// ordered, chained path. The RC tree walk needs that ordering. The caller's
-// routing does not survive it.
+// Parasitic extraction begins by calling odb::normalizeWireConnectivity(),
+// which walks every non-supply net through WireNormalizer and REWRITES its
+// dbWire into a normalized, chained path. The RC tree walk needs that
+// connectivity. The caller's routing does not survive it.
 //
 // MEASURED on a detail-routed gf180mcuD design (655 signal nets), with nothing
 // else in the session -- read_db, define_process_corner, extract_parasitics,
@@ -47,12 +47,13 @@ namespace rcx {
 // afterwards through dbWire::addOneSeg -- odb's own documented way to "save and
 // restore routing without re-encoding it". The parasitics are untouched:
 // write_spef produces a byte-identical SPEF either side of the restore (only
-// its *DATE line differs). The wire's ordered flag is restored too, so a later
-// consumer that needs ordered wires still orders them for itself.
+// its *DATE line differs). The wire's normalized-connectivity flag is restored
+// too, so a later consumer that needs normalized wires still normalizes them
+// for itself.
 //
-// This does NOT fix tmg_conn's re-encode, which is the underlying defect and is
-// not this class's to repair. It stops that defect from reaching the caller's
-// database.
+// This does NOT fix WireNormalizer's re-encode, which is the underlying defect
+// and is not this class's to repair. It stops that defect from reaching the
+// caller's database.
 //
 // ONE instance covers as many blocks as it is given, because the multi-chip
 // path orders EVERY die's block and only then extracts across them -- restoring
@@ -82,7 +83,7 @@ class RoutingPreserver
   struct Saved
   {
     odb::dbNet* net{nullptr};
-    bool ordered{false};
+    bool normalized_connectivity{false};
     std::vector<std::pair<unsigned char, int>> stream;
   };
 

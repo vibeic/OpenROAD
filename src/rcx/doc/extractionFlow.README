@@ -41,7 +41,7 @@ Prerequisite Reading: run_extraction.README, Architecture.README
 	function: makeRCNetwork_v2
 	Objects: dbCapNode, dbRSeg
 	Important User Options: -max_res -no_via_merge_res -lefRC -lef_res
-  	Prerequisite Step: odb::orderWires is called before makeBlockRCsegs_v2
+    Prerequisite Step: odb::normalizeWireConnectivity is called before makeBlockRCsegs_v2
 
 	A. Create Resistance Table per Layer to drive RC Merging
 		Note: Values from first process corner are used 

@@ -4,7 +4,6 @@ or_integration_tests(
     45_gcd
     dup_pattern_names
     ext_pattern
-    explicit_fill_refused
     extract_preserves_routing
     gcd
     generate_pattern
@@ -14,6 +13,7 @@ or_integration_tests(
     no_merging
     short_resover
   PASSFAIL_TESTS
+    explicit_fill_refused
     floating_fill_281
     floating_fill_single
     floating_fill_threshold_refused

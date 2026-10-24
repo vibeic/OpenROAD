@@ -2,7 +2,7 @@
 // Copyright (c) 2019-2026, The OpenROAD Authors
 
 // rcx::RoutingPreserver -- the mechanism BOTH extraction paths depend on to
-// leave the caller's routing alone across odb::orderWires().
+// leave the caller's routing alone across odb::normalizeWireConnectivity().
 //
 // The repo has NO multi-chip (HIER) testcase, so the multi-chip call site
 // cannot be exercised end to end here. What is exercised is the exact shape
@@ -88,9 +88,9 @@ std::vector<std::pair<unsigned char, int>> stream(odb::dbNet* net)
   return out;
 }
 
-// Stands in for what tmg_conn::analyzeNet() does to a wire: destroy it and lay
-// the same connectivity down as a DIFFERENT encoding. The test asserts the
-// bytes moved, so this can never silently become a no-op.
+// Stands in for what WireNormalizer does to a wire: destroy it and lay the same
+// connectivity down as a DIFFERENT encoding. The test asserts the bytes moved,
+// so this can never silently become a no-op.
 void reencode(odb::dbNet* net, odb::dbTechLayer* layer)
 {
   odb::dbWire* wire = net->getWire();
@@ -104,7 +104,7 @@ void reencode(odb::dbNet* net, odb::dbTechLayer* layer)
   encoder.addPoint(9000, 1000);
   encoder.addPoint(9000, 7000);
   encoder.end();
-  wire->setOrdered(true);
+  wire->setNormalizedConnectivity(true);
 }
 
 }  // namespace
@@ -122,17 +122,17 @@ TEST(TestRoutingPreserver, MutationStandsWithoutAPreserver)
   // THE CONTROL. Without a preserver the rewrite survives -- which is what the
   // shipped tool did, and why the next test is worth anything.
   EXPECT_NE(stream(net), before);
-  EXPECT_TRUE(net->getWire()->isOrdered());
+  EXPECT_TRUE(net->getWire()->hasNormalizedConnectivity());
 }
 
 TEST(TestRoutingPreserver, PreserverRestoresTheWire)
 {
-  for (const bool ordered : {false, true}) {
-    SCOPED_TRACE(ordered);
+  for (const bool normalized_connectivity : {false, true}) {
+    SCOPED_TRACE(normalized_connectivity);
     Fixture f;
     odb::dbBlock* block = f.makeBlock("chip", "block");
     odb::dbNet* net = f.makeRoutedNet(block, "n1");
-    net->getWire()->setOrdered(ordered);
+    net->getWire()->setNormalizedConnectivity(normalized_connectivity);
     const auto before = stream(net);
     ASSERT_FALSE(before.empty());
 
@@ -140,14 +140,15 @@ TEST(TestRoutingPreserver, PreserverRestoresTheWire)
       RoutingPreserver preserver(&f.logger);
       preserver.snapshot(block);
       reencode(net, f.met1);
-      net->getWire()->setOrdered(!ordered);
+      net->getWire()->setNormalizedConnectivity(!normalized_connectivity);
       // It really did move while the preserver was alive -- otherwise the
       // restore below would be proving nothing.
       EXPECT_EQ(preserver.changedCount(), 1);
     }
 
     EXPECT_EQ(stream(net), before);
-    EXPECT_EQ(net->getWire()->isOrdered(), ordered);
+    EXPECT_EQ(net->getWire()->hasNormalizedConnectivity(),
+              normalized_connectivity);
   }
 }
 

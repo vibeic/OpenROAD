@@ -15,7 +15,6 @@ COMPULSORY_TESTS = [
     "45_gcd",
     "dup_pattern_names",
     "ext_pattern",
-    "explicit_fill_refused",
     "extract_preserves_routing",
     "gcd",
     "generate_pattern",
@@ -28,6 +27,7 @@ COMPULSORY_TESTS = [
 
 # From CMakeLists.txt or_integration_tests(PASSFAIL_TESTS
 PASSFAIL_TESTS = [
+    "explicit_fill_refused",
     "floating_fill_281",
     "floating_fill_single",
     "floating_fill_threshold_refused",
@@ -101,6 +101,7 @@ filegroup(
                 test_name + ".*",
             ],
         ) + {
+            "explicit_fill_refused": ["45_gcd.def"],
             "extract_preserves_routing": [
                 "45_gcd.def",
                 "45_gcd.spefok",

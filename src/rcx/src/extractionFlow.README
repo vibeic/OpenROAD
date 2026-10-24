@@ -63,7 +63,7 @@ Major Flow Steps:
 
   // Create RC network for every net: Resistor Nodes and Resistor Segments,
   // Following the order of the wires
-  // NOTE: dependent on odb::orderWires
+  // NOTE: dependent on odb::normalizeWireConnectivity
  
 
     couplingFlow_v2(maxRect, _couplingFlag, nullptr);

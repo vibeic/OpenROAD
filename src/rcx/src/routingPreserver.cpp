@@ -43,9 +43,9 @@ void RoutingPreserver::snapshot(odb::dbBlock* block)
     return;
   }
   for (odb::dbNet* net : block->getNets()) {
-    // Exactly the nets odb::orderWires() will touch. Anything it skips has
-    // nothing to preserve, and saving it would only cost memory.
-    if (net->getSigType().isSupply() || net->isSpecial()) {
+    // Exactly the nets odb::normalizeWireConnectivity() will touch. Anything
+    // it skips has nothing to preserve, and saving it would only cost memory.
+    if (net->getSigType().isSupply()) {
       continue;
     }
     odb::dbWire* wire = net->getWire();
@@ -54,7 +54,7 @@ void RoutingPreserver::snapshot(odb::dbBlock* block)
     }
     Saved saved;
     saved.net = net;
-    saved.ordered = wire->isOrdered();
+    saved.normalized_connectivity = wire->hasNormalizedConnectivity();
     saved.stream = readStream(wire);
     saved_.push_back(std::move(saved));
   }
@@ -108,13 +108,13 @@ RoutingPreserver::~RoutingPreserver()
     for (const auto& [op, value] : saved.stream) {
       wire->addOneSeg(op, value);
     }
-    wire->setOrdered(saved.ordered);
+    wire->setNormalizedConnectivity(saved.normalized_connectivity);
     restored++;
   }
   if (restored > 0 && logger_ != nullptr) {
     // Reported, not silent: the number IS the size of the defect this works
-    // around, and a run where it drops to 0 means tmg_conn was fixed and this
-    // can go.
+    // around, and a run where it drops to 0 means WireNormalizer was fixed and
+    // this can go.
     logger_->info(utl::RCX,
                   700,
                   "Restored the routing of {} of {} net(s) that wire ordering "

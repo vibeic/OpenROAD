@@ -16,7 +16,7 @@
 #include "odb/db.h"
 #include "odb/dbObject.h"
 #include "odb/dbWireCodec.h"
-#include "odb/wOrder.h"
+#include "odb/normalizeWireConnectivity.h"
 #include "parse.h"
 #include "rcx/extMeasureRC.h"
 #include "rcx/extModelGen.h"
@@ -530,12 +530,12 @@ void Ext::extract(ExtractOptions options)
         fill_count);
   }
 
-  // vibeic fork: see rcx::RoutingPreserver. Constructed BEFORE orderWires() and
-  // destroyed when extract() returns, by any path.
+  // vibeic fork: see rcx::RoutingPreserver. Constructed before wire
+  // normalization and destroyed when extract() returns, by any path.
   RoutingPreserver routing_preserver(logger_);
   routing_preserver.snapshot(block);
 
-  odb::orderWires(logger_, block);
+  odb::normalizeWireConnectivity(logger_, block);
 
   std::vector<std::unique_ptr<FloatingFill>> floating_fills;
   if (supported_floating_fill) {

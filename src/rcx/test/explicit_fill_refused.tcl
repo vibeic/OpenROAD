@@ -28,3 +28,4 @@ if { $message ne "RCX-0540" } {
 }
 
 puts "Explicit fill refusal verified for $fill_count shapes."
+puts "pass"
