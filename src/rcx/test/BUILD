@@ -28,6 +28,9 @@ COMPULSORY_TESTS = [
 
 # From CMakeLists.txt or_integration_tests(PASSFAIL_TESTS
 PASSFAIL_TESTS = [
+    "floating_fill_281",
+    "floating_fill_single",
+    "floating_fill_threshold_refused",
     "test_dielectric_epsilon",
 ]
 
@@ -42,6 +45,8 @@ filegroup(
         "45_patterns.rules",
         "45_via_resistance.tcl",
         "explicit_fill.json",
+        "floating_fill_281.def",
+        "floating_fill_single.def",
         "Nangate45/Nangate45.lef",
         "Nangate45/Nangate45.pdn.tcl",
         "Nangate45/Nangate45.rc",
@@ -100,6 +105,7 @@ filegroup(
                 "45_gcd.def",
                 "45_gcd.spefok",
             ],
+            "floating_fill_threshold_refused": ["floating_fill_single.def"],
             "ext_pattern": ["generate_pattern.defok"],
             "gcd": ["ext_pattern.rules"],
             "no_merging": [

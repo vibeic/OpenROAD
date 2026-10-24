@@ -3,16 +3,19 @@
 
 #include "rcx/ext.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <list>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "odb/db.h"
 #include "odb/dbObject.h"
+#include "odb/dbWireCodec.h"
 #include "odb/wOrder.h"
 #include "parse.h"
 #include "rcx/extMeasureRC.h"
@@ -29,6 +32,258 @@ namespace rcx {
 
 using utl::Logger;
 using utl::RCX;
+
+namespace {
+
+// A dbFill has no electrical owner.  For the deliberately bounded fill
+// profile, expose each exact rectangle to OpenRCX as a temporary routed path,
+// then eliminate the temporary conductor from the extracted capacitance
+// matrix.  The elimination is the zero-net-charge Schur complement, not the
+// (incorrect) approximation of grounding fill.
+struct FillReduction
+{
+  int neighbours = 0;
+  int couplings = 0;
+};
+
+class FloatingFill
+{
+ public:
+  FloatingFill(odb::dbBlock* block,
+               odb::dbFill* fill,
+               size_t index,
+               Logger* logger)
+      : block_(block), logger_(logger)
+  {
+    odb::Rect rect;
+    fill->getRect(rect);
+    if (rect.dx() <= 0 || rect.dy() <= 0) {
+      logger_->error(RCX,
+                     542,
+                     "Explicit fill rectangle has non-positive dimensions.");
+    }
+    odb::dbTechLayer* layer = fill->getTechLayer();
+    if (layer == nullptr
+        || layer->getType() != odb::dbTechLayerType::ROUTING) {
+      logger_->error(RCX,
+                     543,
+                     "The bounded floating-fill profile requires a routing "
+                     "layer rectangle.");
+    }
+
+    const bool horizontal = rect.dx() >= rect.dy();
+    const int fill_width = horizontal ? rect.dy() : rect.dx();
+
+    constexpr const char* base_name = "__rcx_floating_fill__";
+    std::string name = std::string(base_name) + std::to_string(index);
+    for (int suffix = 1; block_->findNet(name.c_str()) != nullptr; suffix++) {
+      name = std::string(base_name) + std::to_string(index) + "_"
+             + std::to_string(suffix);
+    }
+
+    net_ = odb::dbNet::create(block_, name.c_str());
+    if (net_ == nullptr) {
+      logger_->error(RCX, 541, "Could not create the temporary fill net.");
+    }
+    net_->setSigType(odb::dbSigType::SIGNAL);
+
+    odb::dbTechLayerRule* layer_rule = nullptr;
+    if (fill_width != layer->getWidth()) {
+      const std::string rule_name = name + "_ndr";
+      ndr_ = odb::dbTechNonDefaultRule::create(block_, rule_name.c_str());
+      if (ndr_ == nullptr) {
+        odb::dbNet::destroy(net_);
+        net_ = nullptr;
+        logger_->error(RCX,
+                       550,
+                       "Could not create a temporary fill-width rule.");
+      }
+      layer_rule = odb::dbTechLayerRule::create(ndr_, layer);
+      if (layer_rule == nullptr) {
+        odb::dbNet::destroy(net_);
+        net_ = nullptr;
+        odb::dbTechNonDefaultRule::destroyBlockRule(ndr_);
+        ndr_ = nullptr;
+        logger_->error(RCX,
+                       551,
+                       "Could not create a temporary fill layer rule.");
+      }
+      layer_rule->setWidth(fill_width);
+    }
+
+    odb::dbWire* wire = odb::dbWire::create(net_);
+    odb::dbWireEncoder encoder;
+    encoder.begin(wire);
+    if (fill->maskNumber() != 0) {
+      encoder.setColor(fill->maskNumber());
+    }
+    if (layer_rule == nullptr) {
+      encoder.newPath(layer, odb::dbWireType::ROUTED);
+    } else {
+      encoder.newPath(layer, odb::dbWireType::ROUTED, layer_rule);
+    }
+    if (horizontal) {
+      const int y = rect.yMin() + rect.dy() / 2;
+      encoder.addPoint(rect.xMin(), y, 0);
+      encoder.addPoint(rect.xMax(), y, 0);
+    } else {
+      const int x = rect.xMin() + rect.dx() / 2;
+      encoder.addPoint(x, rect.yMin(), 0);
+      encoder.addPoint(x, rect.yMax(), 0);
+    }
+    encoder.end();
+
+    odb::dbWireShapeItr shapes;
+    shapes.begin(wire);
+    odb::dbShape shape;
+    odb::dbShape extra_shape;
+    const bool has_shape = shapes.next(shape);
+    const odb::Rect wire_rect = has_shape ? shape.getBox() : odb::Rect();
+    if (!has_shape || shapes.next(extra_shape) || wire_rect.xMin() != rect.xMin()
+        || wire_rect.yMin() != rect.yMin()
+        || wire_rect.xMax() != rect.xMax()
+        || wire_rect.yMax() != rect.yMax()) {
+      odb::dbNet::destroy(net_);
+      net_ = nullptr;
+      if (ndr_ != nullptr) {
+        odb::dbTechNonDefaultRule::destroyBlockRule(ndr_);
+        ndr_ = nullptr;
+      }
+      logger_->error(RCX,
+                     552,
+                     "Could not represent a dbFill rectangle exactly as a "
+                     "temporary routed shape.");
+    }
+  }
+
+  FloatingFill(const FloatingFill&) = delete;
+  FloatingFill& operator=(const FloatingFill&) = delete;
+
+  ~FloatingFill()
+  {
+    if (net_ != nullptr) {
+      odb::dbNet::destroy(net_);
+    }
+    if (ndr_ != nullptr) {
+      odb::dbTechNonDefaultRule::destroyBlockRule(ndr_);
+    }
+  }
+
+  FillReduction reduce()
+  {
+    const int corner_count = block_->getCornerCount();
+    if (corner_count <= 0) {
+      logger_->error(RCX,
+                     544,
+                     "Floating-fill extraction produced no process corners.");
+    }
+
+    std::vector<double> fill_ground(corner_count, 0.0);
+    for (odb::dbCapNode* cap_node : net_->getCapNodes()) {
+      for (int corner = 0; corner < corner_count; corner++) {
+        fill_ground[corner] += cap_node->getCapacitance(corner);
+      }
+    }
+
+    std::unordered_map<odb::dbCapNode*, std::vector<double>> neighbours;
+    for (odb::dbCCSeg* cc : block_->getCCSegs()) {
+      odb::dbCapNode* source = cc->getSourceCapNode();
+      odb::dbCapNode* target = cc->getTargetCapNode();
+      const bool source_is_fill = source->getNet() == net_;
+      const bool target_is_fill = target->getNet() == net_;
+      if (source_is_fill == target_is_fill) {
+        continue;
+      }
+      odb::dbCapNode* other = source_is_fill ? target : source;
+      auto it = neighbours.try_emplace(other, corner_count, 0.0).first;
+      for (int corner = 0; corner < corner_count; corner++) {
+        it->second[corner] += cc->getCapacitance(corner);
+      }
+    }
+
+    if (neighbours.empty()) {
+      return {};
+    }
+
+    std::vector<double> denominator = fill_ground;
+    for (const auto& [node, capacitance] : neighbours) {
+      for (int corner = 0; corner < corner_count; corner++) {
+        denominator[corner] += capacitance[corner];
+      }
+    }
+    for (int corner = 0; corner < corner_count; corner++) {
+      if (!(denominator[corner] > 0.0)
+          || !std::isfinite(denominator[corner])) {
+        logger_->error(RCX,
+                       546,
+                       "Invalid floating-fill capacitance denominator {} at "
+                       "corner {}.",
+                       denominator[corner],
+                       corner);
+      }
+    }
+
+    std::vector<odb::dbCapNode*> nodes;
+    nodes.reserve(neighbours.size());
+    for (const auto& [node, capacitance] : neighbours) {
+      nodes.push_back(node);
+      for (int corner = 0; corner < corner_count; corner++) {
+        const double added_ground = capacitance[corner]
+                                    * fill_ground[corner]
+                                    / denominator[corner];
+        if (added_ground < 0.0 || !std::isfinite(added_ground)) {
+          logger_->error(RCX,
+                         547,
+                         "Invalid reduced fill-to-ground capacitance {} at "
+                         "corner {}.",
+                         added_ground,
+                         corner);
+        }
+        node->addCapacitance(added_ground, corner);
+      }
+    }
+
+    int added_couplings = 0;
+    for (size_t left = 0; left < nodes.size(); left++) {
+      for (size_t right = left + 1; right < nodes.size(); right++) {
+        std::vector<double> reduced_capacitance(corner_count, 0.0);
+        bool nonzero = false;
+        for (int corner = 0; corner < corner_count; corner++) {
+          const double capacitance
+              = neighbours.at(nodes[left])[corner]
+                * neighbours.at(nodes[right])[corner] / denominator[corner];
+          if (capacitance < 0.0 || !std::isfinite(capacitance)) {
+            logger_->error(RCX,
+                           548,
+                           "Invalid reduced fill coupling {} at corner {}.",
+                           capacitance,
+                           corner);
+          }
+          reduced_capacitance[corner] = capacitance;
+          nonzero = nonzero || capacitance > 0.0;
+        }
+        if (nonzero) {
+          odb::dbCCSeg* reduced
+              = odb::dbCCSeg::create(nodes[left], nodes[right], true);
+          for (int corner = 0; corner < corner_count; corner++) {
+            reduced->addCapacitance(reduced_capacitance[corner], corner);
+          }
+          added_couplings++;
+        }
+      }
+    }
+
+    return {static_cast<int>(neighbours.size()), added_couplings};
+  }
+
+ private:
+  odb::dbBlock* block_;
+  Logger* logger_;
+  odb::dbNet* net_ = nullptr;
+  odb::dbTechNonDefaultRule* ndr_ = nullptr;
+};
+
+}  // namespace
 
 Ext::Ext(odb::dbDatabase* db, Logger* logger, const char* spef_version)
     : _db(db),
@@ -258,14 +513,20 @@ void Ext::extract(ExtractOptions options)
   odb::dbBlock* block = _ext->getBlock();
 
   const uint32_t fill_count = block->getFills().size();
-  if (fill_count > 0) {
+  const bool whole_design
+      = options.net == nullptr || options.net[0] == '\0';
+  const bool supported_floating_fill
+      = fill_count > 0 && fill_count <= 1024 && whole_design
+        && options.coupling_threshold == 0.0;
+  if (fill_count > 0 && !supported_floating_fill) {
     logger_->error(
         RCX,
         540,
-        "The design contains {} explicit dbFill shape(s), but OpenRCX does "
-        "not model their parasitic effect. Refusing to produce fill-blind "
-        "parasitics; use a qualified fill-aware extractor or remove the fill "
-        "geometry before extraction.",
+        "The design contains {} explicit dbFill shape(s). OpenRCX currently "
+        "supports at most 1024 floating routing-layer rectangles in "
+        "whole-design extraction with coupling_threshold 0; refusing an "
+        "unsupported fill profile rather than producing fill-blind "
+        "parasitics.",
         fill_count);
   }
 
@@ -275,6 +536,16 @@ void Ext::extract(ExtractOptions options)
   routing_preserver.snapshot(block);
 
   odb::orderWires(logger_, block);
+
+  std::vector<std::unique_ptr<FloatingFill>> floating_fills;
+  if (supported_floating_fill) {
+    floating_fills.reserve(fill_count);
+    size_t index = 0;
+    for (odb::dbFill* fill : block->getFills()) {
+      floating_fills.push_back(
+          std::make_unique<FloatingFill>(block, fill, index++, logger_));
+    }
+  }
 
   if (options.ext_model_file != nullptr && options.ext_model_file[0] != '\0') {
     logger_->warn(RCX,
@@ -315,6 +586,32 @@ void Ext::extract(ExtractOptions options)
       _ext->setCornerCount();
       _ext->run();
     }
+  }
+
+  int neighbour_nodes = 0;
+  int effective_couplings = 0;
+  for (std::unique_ptr<FloatingFill>& fill : floating_fills) {
+    const FillReduction reduction = fill->reduce();
+    neighbour_nodes += reduction.neighbours;
+    effective_couplings += reduction.couplings;
+    fill.reset();
+  }
+  if (supported_floating_fill && neighbour_nodes == 0) {
+    logger_->error(RCX,
+                   545,
+                   "The explicit fill profile has no extracted coupling to "
+                   "a routed conductor; refusing a vacuous fill result.");
+  }
+  if (supported_floating_fill) {
+    logger_->info(RCX,
+                  549,
+                  "Reduced {} floating dbFill conductor(s) with zero net "
+                  "charge: {} cumulative neighbour node(s), {} effective "
+                  "coupling(s), {} process corner(s).",
+                  fill_count,
+                  neighbour_nodes,
+                  effective_couplings,
+                  block->getCornerCount());
   }
 }
 

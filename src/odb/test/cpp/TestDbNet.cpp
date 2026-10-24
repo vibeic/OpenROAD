@@ -216,6 +216,22 @@ TEST_F(TestDbNet, FindRelatedModNetsClearsSet)
   EXPECT_TRUE(related_modnets.empty());
 }
 
+TEST_F(TestDbNet, DestroyBlockRuleRefusesLiveNetReference)
+{
+  dbTechNonDefaultRule* rule
+      = dbTechNonDefaultRule::create(block_, "live_net_rule");
+  dbNet* net = dbNet::create(block_, "live_net");
+  net->setNonDefaultRule(rule);
+
+  EXPECT_FALSE(dbTechNonDefaultRule::destroyBlockRule(rule));
+  EXPECT_EQ(net->getNonDefaultRule(), rule);
+  EXPECT_EQ(block_->findNonDefaultRule("live_net_rule"), rule);
+
+  net->setNonDefaultRule(nullptr);
+  EXPECT_TRUE(dbTechNonDefaultRule::destroyBlockRule(rule));
+  EXPECT_EQ(block_->findNonDefaultRule("live_net_rule"), nullptr);
+}
+
 TEST_F(TestDbNet, InsertBufferIgnoresSupplyInputs)
 {
   dbMaster* inv_master = db_->findMaster("INV_X1");

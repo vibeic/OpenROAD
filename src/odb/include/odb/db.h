@@ -6889,6 +6889,12 @@ class dbTechNonDefaultRule : public dbObject
   static dbTechNonDefaultRule* create(dbBlock* block, const char* name);
 
   ///
+  /// Destroy a block-local non-default rule that contains only layer rules.
+  /// Returns false when the rule has other dependants or is technology-wide.
+  ///
+  static bool destroyBlockRule(dbTechNonDefaultRule* rule);
+
+  ///
   /// Translate a database-id back to a pointer.
   ///
   static dbTechNonDefaultRule* getTechNonDefaultRule(dbTech* tech,

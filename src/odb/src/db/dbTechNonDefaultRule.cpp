@@ -428,6 +428,31 @@ dbTechNonDefaultRule* dbTechNonDefaultRule::create(dbBlock* block_,
   return (dbTechNonDefaultRule*) rule;
 }
 
+bool dbTechNonDefaultRule::destroyBlockRule(dbTechNonDefaultRule* rule_)
+{
+  _dbTechNonDefaultRule* rule = (_dbTechNonDefaultRule*) rule_;
+  if (rule == nullptr || !rule->flags_.block_rule || !rule->vias_.empty()
+      || !rule->samenet_rules_.empty() || !rule->use_vias_.empty()
+      || !rule->use_rules_.empty() || !rule->cut_layers_.empty()
+      || !rule->min_cuts_.empty()) {
+    return false;
+  }
+
+  _dbBlock* block = rule->getBlock();
+  for (dbNet* net : ((dbBlock*) block)->getNets()) {
+    if (net->getNonDefaultRule() == rule_) {
+      return false;
+    }
+  }
+  for (dbId<_dbTechLayerRule> id : rule->layer_rules_) {
+    if (id != 0) {
+      block->layer_rule_tbl_->destroy(block->layer_rule_tbl_->getPtr(id));
+    }
+  }
+  block->non_default_rule_tbl_->destroy(rule);
+  return true;
+}
+
 dbTechNonDefaultRule* dbTechNonDefaultRule::getTechNonDefaultRule(
     dbTech* tech_,
     uint32_t dbid_)

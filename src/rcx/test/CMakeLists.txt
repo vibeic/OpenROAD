@@ -14,6 +14,9 @@ or_integration_tests(
     no_merging
     short_resover
   PASSFAIL_TESTS
+    floating_fill_281
+    floating_fill_single
+    floating_fill_threshold_refused
     rcx_unit_test
     test_dielectric_epsilon
 )
