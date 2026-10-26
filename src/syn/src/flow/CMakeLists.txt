@@ -41,3 +41,9 @@ target_link_libraries(syn_flow
   PRIVATE
     ${ABC_LIBRARY}
 )
+
+# Rescan the static archive cycle for flow references to Synthesis methods.
+get_target_property(_syn_flow_library_type syn_flow TYPE)
+if(_syn_flow_library_type STREQUAL "STATIC_LIBRARY")
+  target_link_libraries(syn_flow INTERFACE "$<LINK_ONLY:syn_lib>")
+endif()
