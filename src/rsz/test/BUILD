@@ -328,6 +328,7 @@ PASSFAIL_TESTS = [
     # "cpp_tests",
     "repair_timing_fixed",
     "repair_design_fixed_driver",
+    "repair_slew_corner",
     "gain_buffering_top_port_hier",
 ]
 
@@ -345,6 +346,7 @@ SELF_CHECKING_TESTS = [
     "insert_buffer_routed_no_rows",
     "repair_hold_path_group_count",
     "repair_design_fixed_driver",
+    "repair_slew_corner",
     "gain_buffering_top_port_hier",
 ]
 
@@ -564,6 +566,26 @@ cc_test(
         "//src/sta:opensta_lib",
         "//src/tst:integrated_fixture",
         "//src/utl",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "TestPreChecks",
+    srcs = ["cpp/TestPreChecks.cc"],
+    copts = ["-Isrc/rsz/src"],
+    data = [
+        "Nangate45/Nangate45_fast.lib",
+        "Nangate45/Nangate45_slow.lib",
+    ],
+    deps = [
+        "//src/dbSta",
+        "//src/dbSta:dbNetwork",
+        "//src/odb/src/db",
+        "//src/rsz:rsz_impl",
+        "//src/sta:opensta_lib",
+        "//src/tst:integrated_fixture",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],
