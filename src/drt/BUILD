@@ -39,121 +39,7 @@ cc_library(
 )
 
 cc_library(
-    name = "db_hdrs",
-    hdrs = [
-        "src/db/drObj/drAccessPattern.h",
-        "src/db/drObj/drBlockObject.h",
-        "src/db/drObj/drFig.h",
-        "src/db/drObj/drMarker.h",
-        "src/db/drObj/drNet.h",
-        "src/db/drObj/drPin.h",
-        "src/db/drObj/drRef.h",
-        "src/db/drObj/drShape.h",
-        "src/db/drObj/drVia.h",
-        "src/db/gcObj/gcBlockObject.h",
-        "src/db/gcObj/gcFig.h",
-        "src/db/gcObj/gcNet.h",
-        "src/db/gcObj/gcPin.h",
-        "src/db/gcObj/gcShape.h",
-        "src/db/infra/KDTree.hpp",
-        "src/db/infra/frBox.h",
-        "src/db/infra/frPoint.h",
-        "src/db/infra/frSegStyle.h",
-        "src/db/infra/frTime.h",
-        "src/db/obj/frAccess.h",
-        "src/db/obj/frBPin.h",
-        "src/db/obj/frBTerm.h",
-        "src/db/obj/frBlock.h",
-        "src/db/obj/frBlockObject.h",
-        "src/db/obj/frBlockage.h",
-        "src/db/obj/frBoundary.h",
-        "src/db/obj/frFig.h",
-        "src/db/obj/frGCellPattern.h",
-        "src/db/obj/frGuide.h",
-        "src/db/obj/frInst.h",
-        "src/db/obj/frInstBlockage.h",
-        "src/db/obj/frInstTerm.h",
-        "src/db/obj/frMPin.h",
-        "src/db/obj/frMTerm.h",
-        "src/db/obj/frMarker.h",
-        "src/db/obj/frMaster.h",
-        "src/db/obj/frNet.h",
-        "src/db/obj/frPin.h",
-        "src/db/obj/frRef.h",
-        "src/db/obj/frShape.h",
-        "src/db/obj/frTerm.h",
-        "src/db/obj/frTrackPattern.h",
-        "src/db/obj/frVia.h",
-        "src/db/taObj/taBlockObject.h",
-        "src/db/taObj/taFig.h",
-        "src/db/taObj/taPin.h",
-        "src/db/taObj/taShape.h",
-        "src/db/taObj/taVia.h",
-        "src/db/tech/frConstraint.h",
-        "src/db/tech/frLayer.h",
-        "src/db/tech/frLookupTbl.h",
-        "src/db/tech/frTechObject.h",
-        "src/db/tech/frViaDef.h",
-        "src/db/tech/frViaRuleGenerate.h",
-    ],
-    includes = [
-        "src",
-    ],
-    visibility = ["//src/drt:__subpackages__"],
-    deps = [
-        ":base_types",
-        # TODO: need :drt_private_hdrs, but that reveals a cylcic dependency
-        #":drt_private_hdrs",
-        "//src/odb/src/db",
-        "//src/utl",
-        "@boost.polygon",
-    ],
-)
-
-# Headers owned by :drt but also consumed by :ui. Kept package-private so
-# nothing outside //src/drt can depend on them.
-cc_library(
-    name = "drt_private_hdrs",
-    hdrs = [
-        "src/AbstractGraphicsFactory.h",
-        "src/distributed/drUpdate.h",
-        "src/dr/AbstractDRGraphics.h",
-        "src/dr/FlexDR.h",
-        "src/dr/FlexGridGraph.h",
-        "src/dr/FlexWavefront.h",
-        "src/drt-global.h",
-        "src/frDesign.h",
-        "src/frRegionQuery.h",
-        "src/gc/FlexGC.h",
-        # Consumed by //src/drt/test:multi_pin_bterm_unittest and
-        # :routing_via_connectivity_unittest, which gate io::
-        # multiPinBTermSupported() / firstUnconnectedRoutingPair().  A header
-        # left in :drt's srcs is private to that library, so the tests could
-        # not see it.
-        "src/io/io.h",
-        "src/pa/AbstractPAGraphics.h",
-        "src/pa/FlexPA.h",
-        "src/pa/FlexPA_unique.h",
-        "src/ta/AbstractTAGraphics.h",
-        "src/ta/FlexTA.h",
-    ],
-    includes = ["src"],
-    visibility = ["//src/drt/test:__pkg__"],
-    deps = [
-        ":base_types",
-        ":db_hdrs",
-        "//src/dst",
-        "//src/odb/src/db",
-        "//src/utl",
-        "@boost.container",
-        "@boost.icl",  # io/io.h
-        "@boost.polygon",
-        "@boost.serialization",
-    ],
-)
-
-cc_library(
-    name = "drt",
+    name = "drt_impl",
     srcs = [
         "src/DesignCallBack.cpp",
         "src/DesignCallBack.h",
@@ -209,6 +95,7 @@ cc_library(
         "src/io/GuideProcessor.cpp",
         "src/io/GuideProcessor.h",
         "src/io/io.cpp",
+        "src/io/io.h",
         "src/io/io_parser_helper.cpp",
         "src/io/io_pin.cpp",
         "src/pa/FlexPA.cpp",
