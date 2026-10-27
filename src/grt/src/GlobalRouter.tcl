@@ -374,7 +374,7 @@ proc repair_antennas { args } {
     }
 
     if { $jumper_only && $diode_only } {
-      utl::error GRT 294 "Only use either -jumper_only or -diode_only flag"
+      utl::error GRT 294 "jumper_only and diode_only are mutually exclusive."
     }
 
     set ratio_margin 0

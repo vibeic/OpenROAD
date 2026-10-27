@@ -25,8 +25,9 @@ proc check_power_grid { args } {
   set floorplanning [info exists flags(-floorplanning)]
   set dont_require_bterm [info exists flags(-dont_require_terminals)]
 
+
   psm::check_connectivity_cmd \
-    [psm::find_net $keys(-net)] \
+    $keys(-net) \
     $floorplanning \
     $error_file \
     $dont_require_bterm
@@ -88,6 +89,11 @@ proc analyze_power_grid { args } {
     set source_type $keys(-source_type)
   }
 
+  set is_3d [psm::is_3d_design [[ord::get_db] getChip]]
+  if { $is_3d && [info exists keys(-source_type)] } {
+    utl::error PSM 157 "-source_type is not supported for a 3D assembly."
+  }
+
   # Transient (dynamic / di-dt) analysis path.  Fully backward compatible: the
   # command is byte-identical to the static path unless -transient is given.
   if { [info exists flags(-transient)] } {
@@ -138,8 +144,11 @@ proc analyze_power_grid { args } {
       set package_l $keys(-package_l)
     }
 
+    if { $is_3d } {
+      utl::error PSM 158 "-transient is not supported for a 3D assembly."
+    }
     psm::analyze_power_grid_dynamic_cmd \
-      [psm::find_net $keys(-net)] \
+      $keys(-net) \
       [sta::parse_scene_or_default keys] \
       $source_type \
       $error_file \
@@ -169,8 +178,9 @@ proc analyze_power_grid { args } {
     }
   }
 
+  # find_net only finds 2D dbNets; 3D assembly nets are dbChipNets.
   psm::analyze_power_grid_cmd \
-    [psm::find_net $keys(-net)] \
+    $keys(-net) \
     [sta::parse_scene_or_default keys] \
     $source_type \
     $error_file \
@@ -410,12 +420,14 @@ proc write_pg_spice { args } {
 
 sta::define_cmd_args "set_pdnsim_net_voltage" {
   -net net_name
-  -voltage volt
-  [-corner corner]}
+  [-voltage volt]
+  [-corner corner]
+}
 
 proc set_pdnsim_net_voltage { args } {
   sta::parse_key_args "set_pdnsim_net_voltage" args \
     keys {-net -corner -voltage} flags {}
+
   if { [info exists keys(-net)] && [info exists keys(-voltage)] } {
     set net [psm::find_net $keys(-net)]
     set voltage $keys(-voltage)
@@ -424,6 +436,28 @@ proc set_pdnsim_net_voltage { args } {
   } else {
     utl::error PSM 62 "Argument -net or -voltage not specified.\
       Please specify both -net and -voltage arguments."
+  }
+}
+
+sta::define_cmd_args "set_psm_interchip_resistance" {
+  -resistance resistance
+  [-scene scene]
+}
+
+proc set_psm_interchip_resistance { args } {
+  sta::parse_key_args "set_psm_interchip_resistance" args \
+    keys {-resistance -scene} flags {}
+  sta::check_argc_eq0 "set_psm_interchip_resistance" $args
+  if { ![info exists keys(-resistance)] } {
+    utl::error PSM 135 "Missing mandatory argument -resistance."
+  }
+  sta::check_positive_float "-resistance" $keys(-resistance)
+  set scenes [sta::parse_scene_or_null keys]
+  if { $scenes == "NULL" } {
+    set scenes [sta::scenes]
+  }
+  foreach scene $scenes {
+    psm::set_interchip_resistance_cmd $scene $keys(-resistance)
   }
 }
 

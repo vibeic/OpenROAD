@@ -14,9 +14,9 @@ With J-limit       : 2503
 Vias judged per cut: 0
 No J-limit (skipped): 0
 No area (skipped)  : 0
-Worst J            : 3.775e-04 A/um^2 (layer metal4)
+Worst J            : 2.145e-04 A/um^2 (layer metal4)
 Worst J-limit      : 1.000e+00 A/um^2
-Worst utilization  : 0.04 %
+Worst utilization  : 0.02 %
 Violations         : 0
 Verdict            : PASS
 ###############################################
@@ -30,11 +30,11 @@ With J-limit       : 2503
 Vias judged per cut: 0
 No J-limit (skipped): 0
 No area (skipped)  : 0
-Worst J            : 3.775e-04 A/um^2 (layer metal4)
+Worst J            : 2.145e-04 A/um^2 (layer metal4)
 Worst J-limit      : 2.000e-04 A/um^2
-Worst utilization  : 188.74 %
-Violations         : 16
+Worst utilization  : 107.23 %
+Violations         : 2
 Verdict            : FAIL
 ###############################################
-[WARNING PSM-0112] EM current-density signoff FAILED for net VDD: 16 segment(s) exceed the per-layer J-limit (worst 188.7% of limit on metal4).
-EM3 self-check: loose=0 (PASS) tight=16 (FAIL) OK
+[WARNING PSM-0112] EM current-density signoff FAILED for net VDD: 2 segment(s) exceed the per-layer J-limit (worst 107.2% of limit on metal4).
+EM3 self-check: loose=0 (PASS) tight=2 (FAIL) OK

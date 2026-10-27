@@ -10,35 +10,35 @@
 ########## IR report #################
 Net              : VDD
 Corner           : default
-Total power      : 1.38e-04 W
+Total power      : 7.90e-05 W
 Supply voltage   : 1.10e+00 V
 Worstcase voltage: 1.10e+00 V
 Average voltage  : 1.10e+00 V
-Average IR drop  : 3.13e-04 V
-Worstcase IR drop: 5.04e-04 V
-Percentage drop  : 0.05 %
+Average IR drop  : 1.79e-04 V
+Worstcase IR drop: 2.97e-04 V
+Percentage drop  : 0.03 %
 ######################################
 ### sizing: droop too high, must widen ###
-Measured worst droop  : 5.037e-04 V
+Measured worst droop  : 2.973e-04 V
 Target droop          : 2.500e-04 V
 Irreducible floor     : 1.000e-06 V
 Current strap width   : 2.000e-07 m
-Required strap width  : 4.038e-07 m
+Required strap width  : 2.380e-07 m
 Predicted droop       : 2.500e-04 V
 Sizing verdict        : FEASIBLE
 ### sizing: target below package floor, must be infeasible ###
-Measured worst droop  : 5.037e-04 V
+Measured worst droop  : 2.973e-04 V
 Target droop          : 2.000e-04 V
 Irreducible floor     : 3.000e-04 V
 Current strap width   : 2.000e-07 m
 Sizing verdict        : INFEASIBLE
 Reason                : target at or below the irreducible package/bump floor; on-die widening cannot meet it
 ### sizing: target already met, no widening ###
-Measured worst droop  : 5.037e-04 V
+Measured worst droop  : 2.973e-04 V
 Target droop          : 1.000e-03 V
 Irreducible floor     : 1.000e-06 V
 Current strap width   : 2.000e-07 m
-Required strap width  : 1.006e-07 m
+Required strap width  : 5.933e-08 m
 Predicted droop       : 1.000e-03 V
 Sizing verdict        : FEASIBLE
 ### decap: budget below DC droop, finite decap ###

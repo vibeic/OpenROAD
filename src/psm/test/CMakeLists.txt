@@ -1,6 +1,13 @@
 or_integration_tests(
   "psm"
   TESTS
+    3dic_check_power_grid_aes_gcd_nangate45
+    3dic_external_power_source
+    3dic_check_power_grid_bump_pad_disconnected_pdn_net
+    3dic_check_power_grid_frontside
+    3dic_check_power_grid_missing_bump_mapping
+    3dic_check_power_grid_require_bterms_fail
+    3dic_test_vdd
     aes_asap7_vdd
     aes_test_bterms_source_resistance
     aes_test_bterms
@@ -39,6 +46,8 @@ or_integration_tests(
     gcd_gt2n_backside
     gcd_gt2n_backside_wo_pins
     gcd_gt2n_backside_wo_pins_straps
+    gcd_em_density_vdd
+    gcd_signal_em
     gcd_no_vsrc
     gcd_no_vsrc_reuse
     gcd_sizing_vdd
@@ -63,6 +72,7 @@ or_integration_tests(
   PASSFAIL_TESTS
     cpp_tests
 )
+add_subdirectory(cpp)
 
 add_subdirectory(cpp)
 
