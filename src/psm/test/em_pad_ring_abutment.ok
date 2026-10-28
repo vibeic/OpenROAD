@@ -16,14 +16,14 @@ Supply voltage   : 1.20e+00 V
 Worstcase voltage: 1.20e+00 V
 Average voltage  : 1.20e+00 V
 Average IR drop  : 3.29e-09 V
-Worstcase IR drop: 1.88e-08 V
+Worstcase IR drop: 1.87e-08 V
 Percentage drop  : 0.00 %
 ######################################
 ########## EM analysis ###############
 Net                : VDD
 Corner             : default
 Maximum current    : 3.04e-07 A
-Average current    : 3.04e-09 A
+Average current    : 3.05e-09 A
 Number of resistors: 4893
 ######################################
 [INFO PSM-0040] All shapes on net VDD are connected.
@@ -36,7 +36,7 @@ With J-limit       : 4893
 Vias judged per cut: 2770
 No J-limit (skipped): 0
 No area (skipped)  : 0
-Worst J            : 1.573e-08 A/cut (layer TopVia2)
+Worst J            : 1.590e-08 A/cut (layer TopVia2)
 Worst J-limit      : 1.000e+00 A/cut
 Worst utilization  : 0.00 %
 Violations         : 0
