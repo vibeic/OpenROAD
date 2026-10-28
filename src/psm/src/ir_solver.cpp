@@ -2387,14 +2387,14 @@ void IRSolver::solveTransient(sta::Scene* corner,
   // Validate the transient controls.
   if (settings.period <= 0.0) {
     logger_->error(
-        utl::PSM, 100, "Transient analysis requires a positive -period.");
+        utl::PSM, 119, "Transient analysis requires a positive -period.");
   }
   if (settings.steps < 1) {
-    logger_->error(utl::PSM, 101, "Transient analysis requires -steps >= 1.");
+    logger_->error(utl::PSM, 120, "Transient analysis requires -steps >= 1.");
   }
   const double duty = settings.current_duty;
   if (duty <= 0.0 || duty > 1.0) {
-    logger_->error(utl::PSM, 102, "Transient -current_duty must be in (0, 1].");
+    logger_->error(utl::PSM, 121, "Transient -current_duty must be in (0, 1].");
   }
 
   transient_min_voltages_.erase(corner);
