@@ -159,6 +159,30 @@ cts_clock_skew clock_net
 Returns the skew of the named clock root net, in seconds, at the given scene
 (the command scene if omitted).
 
+### Clock Insertion Delay Value
+
+Returns the maximum sink arrival of the named clock root net, in seconds,
+at the selected timing scene. The command scene is used when `-scene` is
+omitted. A clock with no sinks, an unknown scene, or a net that is not a
+clock root is an error.
+
+```tcl
+cts_clock_insertion_delay clock_net
+    [-scene scene]
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `-scene` | Timing scene to query; defaults to the command scene. |
+
+#### Arguments
+
+| Argument | Description |
+| ----- | ----- |
+| `clock_net` | Name of the clock root net. |
+
 ### Report CTS CRPR
 
 Reports the common-path pessimism credit that the clock tree topology earns.
