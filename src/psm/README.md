@@ -143,76 +143,40 @@ via2 per_cut 1.5e-4
   `-em_report` CSV are in A per cut, and the log prints the worst J and its
   limit in `A/cut` when the worst segment is one.
 
-### Check Current Density
+### Check Signal Electromigration
 
-This command checks the DC current density of every segment of a power or
-ground net's grid against per-layer limits (EM signoff). It solves the grid
-as `analyze_power_grid` does, judges each wire and via segment, logs the
-worst utilization and the verdict (PASS, FAIL, or NOT_MEASURED), and returns
-the number of violations.
+Estimates average, RMS, and peak current density on routed signal-net
+segments from timing/load data, supply swing, switching activity, and routing
+geometry. Returns the number of segments that exceed a supplied limit. The
+report also lists skipped segments; a zero violation count alone does not
+prove complete coverage when drive, geometry, or limits are missing.
 
 ```tcl
-check_current_density
-    -net net_name
+check_signal_em
     [-corner corner]
-    [-em_limit limit]
+    [-supply_voltage volts]
+    [-toggle_rate transitions_per_second]
+    [-activity_file file]
+    [-avg_limit limit]
+    [-rms_limit limit]
+    [-peak_limit limit]
     [-em_limits_file file]
     [-em_report report_file]
-    [-vsrc voltage_source_file]
-    [-source_type FULL|BUMPS|STRAPS]
-    [-allow_reuse]
 ```
 
 #### Options
 
 | Switch Name | Description |
 | ----- | ----- |
-| `-net` | Name of the net to check, power or ground net name. |
-| `-corner` | Corner to use for analysis. |
-| `-em_limit` | Current-density limit in A/um^2 for every layer the limits file does not name. |
-| `-em_limits_file` | File of per-layer limits, in the format described under [Limits File](#limits-file). |
-| `-em_report` | Write every segment into a CSV file: layer, end points, current, cross-section, J, limit, ratio, status (OK, VIOLATED, NO_AREA, NO_LIMIT), cut count and basis (AREAL, PER_CUT, NO_AREA, NO_LIMIT). |
-| `-vsrc` | File to set the location of the power C4 bumps/IO pins, as for `analyze_power_grid`. |
-| `-source_type` | Type of voltage source grid to [model](#source-grid-options), as for `analyze_power_grid`. |
-| `-allow_reuse` | Allow the check to reuse a previous solution, if one exists. |
-
-A wire is judged on J = I / (width x thickness). The width is that of the
-drawn metal carrying the segment, measured across it: the narrowest position
-along the segment, each position as wide as the widest drawn shape covering
-it. A via is judged on its own cut layer, either per cut or on its total cut
-area (see [Limits File](#limits-file)). A segment with no cross-section
-(NO_AREA) or no limit for its layer (NO_LIMIT) is counted, listed per layer in
-the log and written to the report, and the verdict is then NOT_MEASURED
-rather than PASS.
-
-With neither `-em_limit` nor `-em_limits_file`, the limits are taken from the
-tech LEF's `DCCURRENTDENSITY AVERAGE` values in the LEF reference units: a
-routing layer's value (mA per um of width) is divided by the layer's
-`THICKNESS`, and a cut layer's value is mA per um^2 of cut area.
-
-#### Limits File
-
-One limit per line; blank lines and text after `#` are ignored. A line takes
-one of two forms:
-
-```
-# <layer> <limit in A/um^2>
-metal1 1.0e-3
-via1 2.0e-3
-# <cut layer> per_cut <limit in A per cut>
-via2 per_cut 1.5e-4
-```
-
-- `<layer> <A/um^2>` is an areal limit. A wire on a routing layer is judged
-  on I / (width x thickness); a via on a cut layer is judged on
-  I / (total area of its cuts).
-- `<cut layer> per_cut <A per cut>` is a per-cut limit, such as a foundry
-  maximum current per via. A via on that cut layer is judged on its current
-  per cut, I / cuts, using the via's effective cut count, against the limit.
-  The per-cut form takes precedence over an areal limit for the same cut
-  layer. For such a segment (basis PER_CUT) the J and Jlimit columns of the
-  `-em_report` CSV are in A per cut, and the log prints the worst J and its
-  limit in `A/cut` when the worst segment is one.
+| `-corner` | Timing corner to analyze. |
+| `-supply_voltage` | Signal supply swing in volts; defaults to the Liberty nominal voltage when available. |
+| `-toggle_rate` | Default switching rate in transitions per second. |
+| `-activity_file` | File providing per-net activity instead of the default switching rate. |
+| `-avg_limit` | Default average current-density limit in A/um^2. |
+| `-rms_limit` | Default RMS current-density limit in A/um^2. |
+| `-peak_limit` | Default peak current-density limit in A/um^2. |
+| `-em_limits_file` | File supplying per-layer signal current-density limits. |
+| `-em_report` | Write the per-segment current density, limits, utilization, and status to a CSV file. |
 
 ### Write Spice Power Grid
 
@@ -336,6 +300,59 @@ insert_decap -target_cap target_cap [-net net_name] -cells list_of_decap_with_ca
 | `-target_cap` | Target capacitance to insert os decap cells. |
 | `-net` | Power or ground net name. The decap cells will be inserted near the IR Drops of the net. |
 | `-cells` | List of even size of decap master cells and their capacitances. |
+
+### Size PDN for Droop
+
+Reports a strap width predicted to meet the target droop from the worst IR
+drop measured by a preceding `analyze_power_grid` on the same net. This is an
+advisory calculation; it does not change the grid. The result is infeasible
+when the target is at or below the irreducible droop, or when the required
+width exceeds the specified maximum.
+
+```tcl
+size_pdn_for_droop
+    -net net_name
+    -target_droop droop
+    -current_width width
+    [-irreducible_droop droop]
+    [-min_width width]
+    [-max_width width]
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `-net` | Analyzed power or ground net. |
+| `-target_droop` | Required maximum voltage drop, in the active voltage units. |
+| `-current_width` | Width used for the measured grid, in the active distance units. |
+| `-irreducible_droop` | Voltage drop that widening cannot remove; defaults to zero. |
+| `-min_width` | Minimum proposed width, in the active distance units. |
+| `-max_width` | Maximum permitted width, in the active distance units. |
+
+### Size Decap for Droop
+
+Reports the decoupling capacitance for a switching event and the conservative
+charge bound `I*T/D`. This is advisory; it does not place decap cells. It
+reports zero required capacitance when the DC droop already meets the target,
+and infeasibility for a non-positive target.
+
+```tcl
+size_decap_for_droop
+    -peak_current current
+    -event_duration time
+    -resistance res
+    -target_droop droop
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `-peak_current` | Event current, in the active current units. |
+| `-event_duration` | Switching-event duration, in the active time units. |
+| `-resistance` | Effective resistance, in the active resistance units. |
+| `-target_droop` | Voltage-drop budget, in the active voltage units. |
 
 ## Source grid options
 

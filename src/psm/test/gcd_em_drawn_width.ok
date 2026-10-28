@@ -14,9 +14,9 @@ With J-limit       : 2503
 Vias judged per cut: 0
 No J-limit (skipped): 0
 No area (skipped)  : 0
-Worst J            : 3.775e-04 A/um^2 (layer metal4)
+Worst J            : 2.145e-04 A/um^2 (layer metal4)
 Worst J-limit      : 1.000e+00 A/um^2
-Worst utilization  : 0.04 %
+Worst utilization  : 0.02 %
 Violations         : 0
 Verdict            : PASS
 ###############################################

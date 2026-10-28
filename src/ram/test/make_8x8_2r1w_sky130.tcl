@@ -1,6 +1,7 @@
 source "helpers.tcl"
 
-set_thread_count [expr [cpu_count] / 4]
+# A geometry golden must use the same routing parallelism on every host.
+set_thread_count 1
 
 read_liberty sky130hd/sky130_fd_sc_hd__tt_025C_1v80.lib
 
@@ -24,6 +25,19 @@ generate_ram \
   -tapcell sky130_fd_sc_hd__tap_1 \
   -max_tap_dist 15 \
   -write_behavioral_verilog $behavioral_file
+
+if { [detailed_route_num_drvs] != 0 } {
+  error "generated RAM has detailed-routing violations"
+}
+foreach net [[ord::get_db_block] getNets] {
+  if { [$net isSpecial] || [$net getSigType] in {POWER GROUND} } {
+    continue
+  }
+  set terminals [expr { [llength [$net getITerms]] + [llength [$net getBTerms]] }]
+  if { $terminals > 1 && [$net getWire] == "NULL" } {
+    error "generated RAM signal net [$net getName] has no route"
+  }
+}
 
 set lef_file [make_result_file make_8x8_2r1w_sky130.lef]
 write_abstract_lef -bloat_occupied_layers $lef_file

@@ -345,6 +345,7 @@ SELF_CHECKING_TESTS = [
     "insert_buffer_routed_before_loads_global",
     "insert_buffer_routed_no_rows",
     "repair_hold_path_group_count",
+    "repair_hold_absolute_count",
     "repair_design_fixed_driver",
     "repair_slew_corner",
     "gain_buffering_top_port_hier",

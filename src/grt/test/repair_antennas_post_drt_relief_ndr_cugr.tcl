@@ -37,4 +37,7 @@ record_routed_nets $block
 set_debug_level GRT verify_demand 1
 repair_antennas
 
-report_moved_wires $block
+lassign [report_moved_wires $block] moved stale
+if { $moved == 0 } {
+  error "CUGR NDR relief did not exercise any routed net with changed guides"
+}

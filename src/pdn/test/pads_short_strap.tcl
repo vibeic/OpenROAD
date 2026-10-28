@@ -62,6 +62,9 @@ foreach {inst_name net_name} {u_vss_w VSS u_vss_s VSS u_vdd_w VDD} {
     }
   }
   puts "$inst_name $net_name straps: $straps"
+  if { $straps != 6 } {
+    error "$inst_name $net_name requires all six pad straps, got $straps"
+  }
 }
 
 set def_file [make_result_file pads_short_strap.def]

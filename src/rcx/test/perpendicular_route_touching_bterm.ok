@@ -12,5 +12,6 @@
 [INFO RCX-0442] 66% of 3 wires extracted
 [INFO RCX-0442] 100% of 3 wires extracted
 [INFO RCX-0045] Extract 1 nets, 4 rsegs, 4 caps, 0 ccs
+[INFO RCX-0700] Restored the routing of 1 of 1 net(s) that wire ordering rewrote. Extraction does not change the route it measures; the parasitics are unaffected.
 [INFO RCX-0443] 1 nets finished
 No differences found.

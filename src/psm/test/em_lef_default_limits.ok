@@ -17,9 +17,9 @@ Vias judged per cut: 0
 No J-limit (skipped): 942
   NO_LIMIT li1         : 942
 No area (skipped)  : 0
-Worst J            : 1.206e-04 A/um^2 (layer via)
+Worst J            : 1.035e-04 A/um^2 (layer via)
 Worst J-limit      : 2.900e-04 A/um^2
-Worst utilization  : 41.59 %
+Worst utilization  : 35.70 %
 Violations         : 0
 Verdict            : NOT_MEASURED
 ###############################################

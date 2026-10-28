@@ -10,13 +10,13 @@
 ########## IR report #################
 Net              : VDD
 Corner           : default
-Total power      : 1.38e-04 W
+Total power      : 7.90e-05 W
 Supply voltage   : 1.10e+00 V
 Worstcase voltage: 1.10e+00 V
 Average voltage  : 1.10e+00 V
-Average IR drop  : 3.13e-04 V
-Worstcase IR drop: 5.04e-04 V
-Percentage drop  : 0.05 %
+Average IR drop  : 1.79e-04 V
+Worstcase IR drop: 2.97e-04 V
+Percentage drop  : 0.03 %
 ######################################
 ########## Dynamic (transient) IR report ##########
 Net                    : VDD
@@ -25,11 +25,11 @@ Supply voltage         : 1.10e+00 V
 Timestep               : 2.00e-11 s
 Steps                  : 100
 On-die capacitance     : 3.10e-15 F
-Worst static IR drop   : 5.04e-04 V
-Worst dynamic IR drop  : 1.08e-03 V
+Worst static IR drop   : 2.97e-04 V
+Worst dynamic IR drop  : 6.38e-04 V
 Dynamic/static ratio   : 2.15
 Current model          : vectored (5 instances matched)
-Package L*di/dt droop  : 7.77e-05 V
+Package L*di/dt droop  : 4.41e-05 V
 Worst droop time       : 1.00e-09 s (step 50)
 ###################################################
 No differences found.

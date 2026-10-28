@@ -11,19 +11,19 @@
 ########## IR report #################
 Net              : VDD
 Corner           : default
-Total power      : 8.69e-06 W
+Total power      : 2.18e-06 W
 Supply voltage   : 1.20e+00 V
 Worstcase voltage: 1.20e+00 V
 Average voltage  : 1.20e+00 V
-Average IR drop  : 1.15e-07 V
-Worstcase IR drop: 6.30e-06 V
+Average IR drop  : 3.29e-09 V
+Worstcase IR drop: 1.88e-08 V
 Percentage drop  : 0.00 %
 ######################################
 ########## EM analysis ###############
 Net                : VDD
 Corner             : default
-Maximum current    : 2.03e-06 A
-Average current    : 3.56e-08 A
+Maximum current    : 3.04e-07 A
+Average current    : 3.04e-09 A
 Number of resistors: 4893
 ######################################
 [INFO PSM-0040] All shapes on net VDD are connected.
@@ -36,8 +36,8 @@ With J-limit       : 4893
 Vias judged per cut: 2770
 No J-limit (skipped): 0
 No area (skipped)  : 0
-Worst J            : 1.055e-05 A/um^2 (layer Metal1)
-Worst J-limit      : 1.000e+00 A/um^2
+Worst J            : 1.573e-08 A/cut (layer TopVia2)
+Worst J-limit      : 1.000e+00 A/cut
 Worst utilization  : 0.00 %
 Violations         : 0
 Verdict            : PASS

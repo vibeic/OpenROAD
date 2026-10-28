@@ -42,7 +42,7 @@ foreach inst [$block getInsts] {
 if { $moved == 0 } {
   puts "PASS $checked frozen instances kept byte-identical coordinates"
 } else {
-  puts "FAIL $moved of $checked frozen instances moved"
+  error "$moved of $checked frozen instances moved"
 }
 
 # The freeze must not be achieved by refusing to do the work: the ECO cells
@@ -58,11 +58,11 @@ foreach name $eco {
   lassign [$inst getLocation] x y
   # odb renders the unplaced status as NONE.
   if { [$inst getPlacementStatus] == "NONE" } {
-    puts "FAIL ECO cell $name left unplaced"
+    error "ECO cell $name left unplaced"
   } elseif { $x >= $core_lx && $x <= $core_ux && $y >= $core_ly && $y <= $core_uy } {
     incr placed
   } else {
-    puts "FAIL ECO cell $name placed outside core at $x $y"
+    error "ECO cell $name placed outside core at $x $y"
   }
 }
 if { $placed == [llength $eco] } {
