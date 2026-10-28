@@ -36,5 +36,5 @@ foreach inst [$block getInsts] {
 if { $moved > 0 } {
   puts "PASS unfrozen run moved $moved of $checked instances, so the freeze is doing real work"
 } else {
-  puts "FAIL unfrozen run moved nothing; the freeze gate is vacuous"
+  error "unfrozen run moved nothing; the freeze gate is vacuous"
 }

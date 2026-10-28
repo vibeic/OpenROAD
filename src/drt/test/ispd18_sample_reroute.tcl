@@ -11,6 +11,10 @@ detailed_route -output_drc [make_result_file ispd18_sample.output.drc.rpt] \
   -output_guide_coverage [make_result_file ispd18_sample.coverage.csv] \
   -verbose 0
 
+if { [detailed_route_num_drvs] != 0 } {
+  error "rerouted sample still has detailed-routing violations"
+}
+
 set def_file [make_result_file ispd18_sample_reroute.def]
 write_def $def_file
 diff_files ispd18_sample_reroute.defok $def_file

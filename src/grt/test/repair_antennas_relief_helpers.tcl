@@ -40,4 +40,8 @@ proc report_moved_wires { block } {
     }
   }
   puts "Routed nets with new guides: $rerouted, keeping their old wire: $stale"
+  if { $stale != 0 } {
+    error "$stale rerouted nets retain their obsolete detailed wires"
+  }
+  return [list $rerouted $stale]
 }

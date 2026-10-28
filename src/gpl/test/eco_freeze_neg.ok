@@ -39,47 +39,90 @@
 [InitialPlace]  Iter: 4 conjugate gradient residual: 0.00000005 HPWL: 7140044
 [InitialPlace]  Iter: 5 conjugate gradient residual: 0.00000002 HPWL: 7139293
 [INFO GPL-0033] ---- Initialize Nesterov Region: Top-level
-[INFO GPL-0023] Placement target density:       0.6597
+[INFO GPL-0023] Placement target density:       0.7000
 [INFO GPL-0024] Movable insts average area:      2.108 um^2
-[INFO GPL-0025] Ideal bin area:                  3.195 um^2
-[INFO GPL-0026] Ideal bin count:                   298
+[INFO GPL-0025] Ideal bin area:                  3.011 um^2
+[INFO GPL-0026] Ideal bin count:                   316
 [INFO GPL-0027] Total bin area:                953.876 um^2
 [INFO GPL-0028] Bin count (X, Y):          16 ,     16
 [INFO GPL-0029] Bin size (W * H):       1.936 *  1.925 um
 [INFO GPL-0030] Number of bins:                    256
+[INFO GPL-0333] Redistributed 23 filler cells into free bin capacity (155.331 um^2 available, 47.978 um^2 needed).
 [INFO GPL-0084] ---- Execute Nesterov Global Placement.
 [INFO GPL-0031] HPWL: Half-Perimeter Wirelength
 Iteration | Overflow |     HPWL (um) |  HPWL(%) |   Penalty | Group
 ---------------------------------------------------------------
-        0 |   0.2019 |  2.533650e+03 |   +0.00% |  1.09e-08 |      
-       10 |   0.2019 |  2.533650e+03 |   +0.00% |  1.61e-08 |      
-       20 |   0.2019 |  2.533650e+03 |   +0.00% |  2.37e-08 |      
-       30 |   0.2019 |  2.533650e+03 |   +0.00% |  3.49e-08 |      
-       40 |   0.2019 |  2.533650e+03 |   +0.00% |  5.14e-08 |      
-       50 |   0.2019 |  2.533653e+03 |   +0.00% |  7.58e-08 |      
-       60 |   0.2018 |  2.533827e+03 |   +0.01% |  1.12e-07 |      
-       66 |   0.1999 |  2.535084e+03 |          |  1.46e-07 |      
----------------------------------------------------------------
-[INFO GPL-1001] Global placement finished at iteration 66
-[INFO GPL-1002] Placed Cell Area              619.7347
-[INFO GPL-1003] Available Free Area           953.8760
-[INFO GPL-1004] Minimum Feasible Density        0.6500 (cell_area / free_area)
-[INFO GPL-1006]   Suggested Target Densities:
-[INFO GPL-1007]     - For 90% usage of free space: 0.7219
-[INFO GPL-1008]     - For 80% usage of free space: 0.8121
+        0 |   0.1728 |  2.533716e+03 |   +0.00% |  1.03e-08 |      
+       10 |   0.1728 |  2.533716e+03 |   +0.00% |  1.52e-08 |      
+       20 |   0.1728 |  2.533716e+03 |   +0.00% |  2.23e-08 |      
+       30 |   0.1728 |  2.533716e+03 |   +0.00% |  3.29e-08 |      
+       40 |   0.1728 |  2.533716e+03 |   +0.00% |  4.85e-08 |      
+       50 |   0.1728 |  2.533716e+03 |   +0.00% |  7.14e-08 |      
+       60 |   0.1728 |  2.533715e+03 |   -0.00% |  1.05e-07 |      
+       70 |   0.1731 |  2.533673e+03 |   -0.00% |  1.55e-07 |      
+       80 |   0.1709 |  2.536403e+03 |   +0.11% |  2.28e-07 |      
+       90 |   0.1728 |  2.538037e+03 |   +0.06% |  3.36e-07 |      
+      100 |   0.1708 |  2.541169e+03 |   +0.12% |  4.95e-07 |      
+      110 |   0.1708 |  2.546243e+03 |   +0.20% |  7.30e-07 |      
+      120 |   0.1696 |  2.551573e+03 |   +0.21% |  1.08e-06 |      
+      130 |   0.1695 |  2.555209e+03 |   +0.14% |  1.58e-06 |      
+      140 |   0.1694 |  2.557925e+03 |   +0.11% |  2.33e-06 |      
+      150 |   0.1690 |  2.561517e+03 |   +0.14% |  3.44e-06 |      
+      160 |   0.1689 |  2.565550e+03 |   +0.16% |  5.06e-06 |      
+      170 |   0.1693 |  2.569062e+03 |   +0.14% |  7.46e-06 |      
+      180 |   0.1692 |  2.572501e+03 |   +0.13% |  1.10e-05 |      
+      190 |   0.1688 |  2.576294e+03 |   +0.15% |  1.62e-05 |      
+      200 |   0.1688 |  2.579622e+03 |   +0.13% |  2.38e-05 |      
+      210 |   0.1688 |  2.579055e+03 |   -0.02% |  3.51e-05 |      
+      220 |   0.1688 |  2.578631e+03 |   -0.02% |  5.17e-05 |      
+      230 |   0.1688 |  2.578318e+03 |   -0.01% |  7.62e-05 |      
+      240 |   0.1688 |  2.578113e+03 |   -0.01% |  1.12e-04 |      
+      250 |   0.1688 |  2.578000e+03 |   -0.00% |  1.65e-04 |      
+      260 |   0.1688 |  2.577958e+03 |   -0.00% |  2.44e-04 |      
+      270 |   0.1688 |  2.577974e+03 |   +0.00% |  3.59e-04 |      
+      280 |   0.1688 |  2.578037e+03 |   +0.00% |  5.29e-04 |      
+      290 |   0.1688 |  2.578136e+03 |   +0.00% |  7.79e-04 |      
+      300 |   0.1688 |  2.578225e+03 |   +0.00% |  1.15e-03 |      
+      310 |   0.1688 |  2.578321e+03 |   +0.00% |  1.69e-03 |      
+      320 |   0.1688 |  2.578433e+03 |   +0.00% |  2.49e-03 |      
+      330 |   0.1688 |  2.578556e+03 |   +0.00% |  3.67e-03 |      
+      340 |   0.1688 |  2.578685e+03 |   +0.01% |  5.41e-03 |      
+      350 |   0.1688 |  2.578815e+03 |   +0.01% |  7.96e-03 |      
+      360 |   0.1688 |  2.578940e+03 |   +0.00% |  1.17e-02 |      
+      370 |   0.1688 |  2.579057e+03 |   +0.00% |  1.73e-02 |      
+      380 |   0.1688 |  2.579160e+03 |   +0.00% |  2.55e-02 |      
+      390 |   0.1688 |  2.579250e+03 |   +0.00% |  3.75e-02 |      
+      400 |   0.1688 |  2.579323e+03 |   +0.00% |  5.52e-02 |      
+      410 |   0.1688 |  2.579382e+03 |   +0.00% |  8.14e-02 |      
+      420 |   0.1688 |  2.579425e+03 |   +0.00% |  1.20e-01 |      
+      430 |   0.1688 |  2.579449e+03 |   +0.00% |  1.77e-01 |      
+      440 |   0.1688 |  2.579459e+03 |   +0.00% |  2.60e-01 |      
+      450 |   0.1688 |  2.579456e+03 |   -0.00% |  3.83e-01 |      
+      460 |   0.1688 |  2.579440e+03 |   -0.00% |  5.65e-01 |      
+      470 |   0.1688 |  2.579413e+03 |   -0.00% |  8.32e-01 |      
+      480 |   0.1688 |  2.579378e+03 |   -0.00% |  1.23e+00 |      
+      490 |   0.1688 |  2.579333e+03 |   -0.00% |  1.81e+00 |      
+      500 |   0.1688 |  2.579282e+03 |   -0.00% |  2.66e+00 |      
+      510 |   0.1688 |  2.579223e+03 |   -0.00% |  3.92e+00 |      
+      520 |   0.1688 |  2.579160e+03 |   -0.00% |  5.77e+00 |      
+      530 |   0.1688 |  2.579095e+03 |   -0.00% |  8.50e+00 |      
+      540 |   0.1688 |  2.579028e+03 |   -0.00% |  1.25e+01 |      
+      550 |   0.1688 |  2.578959e+03 |   -0.00% |  1.84e+01 |      
+      560 |   0.1688 |  2.578893e+03 |   -0.00% |  2.72e+01 |      
+      570 |   0.1688 |  2.578829e+03 |   -0.00% |  4.00e+01 |      
+      580 |   0.1688 |  2.578770e+03 |   -0.00% |  5.90e+01 |      
+      590 |   0.1688 |  2.578716e+03 |   -0.00% |  8.69e+01 |      
+[WARNING GPL-1010] GPL reached the maximum number of iterations for nesterov 600. Placement may have failed to converge.
 [INFO GPL-1014] Final placement area: 619.73 (+0.00%)
+[INFO GPL-1018] Final HPWL (um): 2590.50
 [INFO GPL-0133] Unlocking all instances
 [INFO GPL-0084] ---- Execute Nesterov Global Placement.
-       70 |   0.2146 |  2.578950e+03 |   +1.78% |  1.60e-07 |      
-       80 |   0.1962 |  2.581270e+03 |   +0.09% |  2.13e-07 |      
-       90 |   0.1764 |  2.599445e+03 |   +0.70% |  2.83e-07 |      
-      100 |   0.1538 |  2.611752e+03 |   +0.47% |  3.77e-07 |      
-      110 |   0.1357 |  2.625164e+03 |   +0.51% |  5.03e-07 |      
-      120 |   0.1168 |  2.636988e+03 |   +0.45% |  6.70e-07 |      
-      130 |   0.0986 |  2.647799e+03 |   +0.41% |  8.92e-07 |      
-      130 |   0.0986 |  2.647799e+03 |          |  9.18e-07 |      
+[INFO GPL-0191] Incremental density-penalty guard enabled: penalty factor 1, starting overflow 0.169.
+[INFO GPL-0193] Incremental density-penalty guard: overflow regressed past 0.169; escalating the penalty factor to 2 in place (retry 1).
+[INFO GPL-0193] Incremental density-penalty guard: overflow regressed past 0.169; escalating the penalty factor to 4 in place (retry 2).
+      607 |   0.0973 |  2.696193e+03 |          |  1.18e-06 |      
 ---------------------------------------------------------------
-[INFO GPL-1001] Global placement finished at iteration 130
+[INFO GPL-1001] Global placement finished at iteration 607
 [INFO GPL-1002] Placed Cell Area              619.7347
 [INFO GPL-1003] Available Free Area           953.8760
 [INFO GPL-1004] Minimum Feasible Density        0.6500 (cell_area / free_area)
@@ -87,4 +130,5 @@ Iteration | Overflow |     HPWL (um) |  HPWL(%) |   Penalty | Group
 [INFO GPL-1007]     - For 90% usage of free space: 0.7219
 [INFO GPL-1008]     - For 80% usage of free space: 0.8121
 [INFO GPL-1014] Final placement area: 619.73 (+0.00%)
+[INFO GPL-1018] Final HPWL (um): 2697.99
 PASS unfrozen run moved 291 of 291 instances, so the freeze is doing real work
