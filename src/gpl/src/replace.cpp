@@ -23,6 +23,7 @@
 #include "odb/db.h"
 #include "odb/util.h"
 #include "placerBase.h"
+#include "powerBase.h"
 #include "ppl/IOPlacer.h"
 #include "routeBase.h"
 #include "rsz/Resizer.hh"
@@ -112,6 +113,7 @@ void Replace::reset()
   tb_.reset();
   rb_.reset();
   cb_.reset();
+  pwb_.reset();
 }
 
 void Replace::addPlacementCluster(const Cluster& cluster)
@@ -439,6 +441,13 @@ bool Replace::initNesterovPlace(const PlaceOptions& options,
     cb_->setMaxSkewFraction(skew_fraction);
   }
 
+  if (!pwb_ && options.powerDrivenMode) {
+    pwb_ = std::make_shared<PowerBase>(
+        nbc_, sta_, options.powerDrivenNetWeight, log_);
+    pwb_->setPowerNetWeights();
+    nbc_->refreshDeviceNetWeights();
+  }
+
   if (!np_) {
     // The controller's proportional band is set by referenceHpwl, so it has to
     // be on the design's own scale. Resolve the default from the HPWL the
@@ -469,6 +478,7 @@ bool Replace::initNesterovPlace(const PlaceOptions& options,
                                           rb_,
                                           tb_,
                                           cb_,
+                                          pwb_,
                                           graphics_->MakeNew(log_),
                                           log_);
   }
@@ -665,6 +675,7 @@ void PlaceOptions::validate(utl::Logger* logger)
         "timing_driven_net_reweight_overflow", timingNetOverflow, 422);
   }
   val.check_positive("timing_driven_net_weight_max", timingNetWeightMax, 423);
+  val.check_non_negative("power_driven_net_weight", powerDrivenNetWeight, 429);
   val.check_range("timing_driven_nets_percentage",
                   timingDrivenNetsPercentage,
                   0.0f,
