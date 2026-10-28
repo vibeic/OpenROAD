@@ -114,6 +114,10 @@ def cmake_integration_tests(path):
     if not path.exists():
         return set()
     text = _strip_comments(path.read_text())
+    subdirectories = [tuple(_balanced_call_args(text, match.end() - 1).split())
+                      for match in re.finditer(r"\badd_subdirectory\s*\(", text)]
+    if len(subdirectories) != len(set(subdirectories)):
+        raise ValueError(f"{path}: duplicate add_subdirectory registration")
 
     variables = {}
     for m in re.finditer(r"\bset\s*\(", text):
@@ -133,11 +137,17 @@ def cmake_integration_tests(path):
     for m in re.finditer(r"\bor_integration_tests\b", text):
         toks = _balanced_call_args(text, m.end()).replace('"', " ").split()
         active = False
+        call_tests = set()
         for tok in toks[1:]:
             if tok in ("TESTS", "PASSFAIL_TESTS"):
                 active = True
             elif active:
-                tests.update(expand(tok))
+                expanded = expand(tok)
+                for name in expanded:
+                    if name in call_tests:
+                        raise ValueError(f"{path}: duplicate integration test {name}")
+                    call_tests.add(name)
+                    tests.add(name)
     return tests
 
 
@@ -416,7 +426,11 @@ def main():
                           if p.is_dir() and (p / "CMakeLists.txt").exists()
                           and p.name not in gitlinks):
         mod = mod_dir.name
-        c_int = cmake_integration_tests(mod_dir / "test" / "CMakeLists.txt")
+        try:
+            c_int = cmake_integration_tests(mod_dir / "test" / "CMakeLists.txt")
+        except ValueError as exc:
+            print(f"FAIL: {exc}")
+            return 1
         c_cpp = cmake_cpp_tests(mod_dir)
         b_reg, b_cc = bazel_tests(mod_dir)
         checked += len(c_int) + len(c_cpp)
