@@ -388,7 +388,7 @@ SignalEMResult PDNSim::checkSignalEM(sta::Scene* corner,
   }
   if (limits.empty()) {
     logger_->warn(utl::PSM,
-                  125,
+                  177,
                   "No signal EM current-density limit supplied (-avg_limit / "
                   "-rms_limit / -peak_limit / -em_limits_file); every segment "
                   "is reported as NO_LIMIT and the check cannot fail.  Provide "

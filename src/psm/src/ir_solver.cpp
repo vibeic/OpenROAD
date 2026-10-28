@@ -2394,7 +2394,7 @@ void IRSolver::solveTransient(sta::Scene* corner,
   }
   const double duty = settings.current_duty;
   if (duty <= 0.0 || duty > 1.0) {
-    logger_->error(utl::PSM, 121, "Transient -current_duty must be in (0, 1].");
+    logger_->error(utl::PSM, 173, "Transient -current_duty must be in (0, 1].");
   }
 
   transient_min_voltages_.erase(corner);
@@ -2482,7 +2482,7 @@ void IRSolver::solveTransient(sta::Scene* corner,
     }
     if (prof_t.size() < 2) {
       logger_->error(utl::PSM,
-                     105,
+                     174,
                      "Current profile {} needs at least two samples.",
                      settings.current_profile);
     }
@@ -2686,7 +2686,7 @@ void IRSolver::solveTransient(sta::Scene* corner,
                            rhs_fn,
                            /*track_min=*/!is_ground);
   } catch (const std::exception& e) {
-    logger_->error(utl::PSM, 103, "Transient solve failed: {}.", e.what());
+    logger_->error(utl::PSM, 175, "Transient solve failed: {}.", e.what());
   }
 
   // Worst instantaneous package droop over the window (for reporting).
@@ -3485,7 +3485,7 @@ void IRSolver::writeTransientVoltageFile(const std::string& voltage_file,
   std::ofstream report(voltage_file);
   if (!report) {
     logger_->error(utl::PSM,
-                   106,
+                   176,
                    "Unable to open {} to write transient voltage file",
                    voltage_file);
   }
