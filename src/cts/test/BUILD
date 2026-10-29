@@ -59,6 +59,7 @@ COMPULSORY_TESTS = [
     "sink_clustering_single_sink",
     "skip_nets",
     "twice",
+    "useful_skew",
     "virtual_clock_latency",
 ]
 
@@ -266,6 +267,10 @@ filegroup(
             ],
             "twice": [
                 "16sinks.def",
+            ],
+            "useful_skew": [
+                "array_tile_ins_delay.lef",
+                "array_tile_ins_delay.lib",
             ],
             "virtual_clock_latency": [
                 "16sinks.def",
