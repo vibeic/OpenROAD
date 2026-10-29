@@ -24,6 +24,7 @@ test_suite(
     name = "all_tests",
     tests = [
         ":code_coverage_test",
+        ":release_regressions_test",
         ":test_whittle",
     ],
 )
@@ -45,4 +46,14 @@ py_library(
     name = "whittle_lib",
     srcs = ["whittle.py"],
     imports = ["."],
+)
+
+py_test(
+    name = "release_regressions_test",
+    size = "small",
+    srcs = [
+        "check_release_regressions.py",
+        "test_release_regressions.py",
+    ],
+    main = "test_release_regressions.py",
 )
