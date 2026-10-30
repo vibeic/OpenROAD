@@ -44,6 +44,9 @@ class ReleaseSelectionTest(unittest.TestCase):
         self.assertFalse(any("test_tag_filters" in a for a in native))
         for target in (
             "//src/gpl/test:eco_freeze_neg-tcl_test",
+            "//src/grt/test:repair_antennas_post_drt_above_max_layer_cugr-tcl_test",
+            "//src/grt/test:repair_antennas_post_drt_below_min_cugr-tcl_test",
+            "//src/grt/test:repair_antennas_post_drt_cugr-tcl_test",
             "//src/pdn/test:pads_short_strap-tcl_test",
             "//src/ram/test:make_8x8_2r1w_sky130-tcl_test",
             "//src/rsz/test:repair_hold_absolute_count-tcl_test",
